@@ -20,6 +20,9 @@ interface CandidatureRepository
     /** Generate a fresh identity for a new candidature (infrastructure supplies the ULID). */
     public function nextIdentity(): CandidatureId;
 
+    /** Load a candidature by id, or null if none exists. */
+    public function findById(CandidatureId $id): ?Candidature;
+
     /** Whether a candidature already exists for the given (normalized) email. */
     public function existsByEmail(Email $email): bool;
 

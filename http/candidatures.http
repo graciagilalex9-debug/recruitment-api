@@ -72,3 +72,59 @@ Accept: application/json
   "years_of_experience": 4,
   "cv": "..."
 }
+
+
+# =====================================================================
+# Candidature validation — GET /candidatures/{id}/validation
+# These chain requests: register a candidate, capture its id from the
+# response, then validate THAT id. {{$timestamp}} keeps emails unique so
+# the POSTs don't 409 on re-runs.
+# =====================================================================
+
+### Register an ELIGIBLE candidate (>= 2 years), then capture its id
+POST {{baseUrl}}/candidatures
+Content-Type: application/json
+Accept: application/json
+
+{
+  "full_name": "Grace Hopper",
+  "email": "grace-{{$timestamp}}@example.com",
+  "years_of_experience": 9,
+  "cv": "Compiler pioneer."
+}
+
+> {%
+    client.global.set("eligible_id", response.body.data.id);
+%}
+
+### Validate the eligible candidate (expect 200, valid: true, all rules passed)
+GET {{baseUrl}}/candidatures/{{eligible_id}}/validation
+Accept: application/json
+
+### Register an INELIGIBLE candidate (1 year), then capture its id
+POST {{baseUrl}}/candidatures
+Content-Type: application/json
+Accept: application/json
+
+{
+  "full_name": "Junior Dev",
+  "email": "junior-{{$timestamp}}@example.com",
+  "years_of_experience": 1,
+  "cv": "Eager to learn."
+}
+
+> {%
+    client.global.set("ineligible_id", response.body.data.id);
+%}
+
+### Validate the ineligible candidate (expect 200, valid: false, minimum_experience failed)
+GET {{baseUrl}}/candidatures/{{ineligible_id}}/validation
+Accept: application/json
+
+### Validate a well-formed but non-existent ULID (expect 404)
+GET {{baseUrl}}/candidatures/01BX5ZZKBKACTAV9WEVGEMMVRZ/validation
+Accept: application/json
+
+### Validate a malformed id (expect 404 — route miss via whereUlid)
+GET {{baseUrl}}/candidatures/not-a-ulid/validation
+Accept: application/json

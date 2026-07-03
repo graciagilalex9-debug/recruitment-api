@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Candidature\Domain\Exception\CandidatureAlreadyExists;
+use App\Candidature\Domain\Exception\CandidatureNotFound;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -25,5 +26,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // A duplicate email is a business conflict, not a server error.
         $exceptions->render(
             fn (CandidatureAlreadyExists $e) => response()->json(['message' => $e->getMessage()], 409),
+        );
+
+        // Validating (or otherwise addressing) a missing candidature is a 404.
+        $exceptions->render(
+            fn (CandidatureNotFound $e) => response()->json(['message' => $e->getMessage()], 404),
         );
     })->create();

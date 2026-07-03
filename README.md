@@ -166,6 +166,36 @@ curl -X POST http://localhost:8080/candidatures \
 | `409 Conflict` | A candidature with that email already exists (case-insensitive). |
 | `422 Unprocessable Entity` | Missing/malformed input (per-field errors). |
 
+### `GET /candidatures/{id}/validation`
+
+Evaluates a stored candidature's eligibility and reports **why**, with a per-rule breakdown. Rules are
+extensible without modifying existing ones (a rule-collection pipeline; see the design notes). Computed
+on the fly — nothing is persisted.
+
+```bash
+curl http://localhost:8080/candidatures/01J9Z8K3Q7R5X2M4B6T8V0W1C2/validation \
+  -H "Accept: application/json"
+```
+
+```json
+{
+  "data": {
+    "candidature_id": "01J9Z8K3Q7R5X2M4B6T8V0W1C2",
+    "valid": false,
+    "rules": [
+      { "rule": "has_cv",             "passed": true,  "reason": "The candidature has a CV." },
+      { "rule": "valid_email",        "passed": true,  "reason": "The email is valid." },
+      { "rule": "minimum_experience", "passed": false, "reason": "Requires at least 2 years of experience; has 1." }
+    ]
+  }
+}
+```
+
+| Status | When |
+|---|---|
+| `200 OK` | Report returned; `valid` is `true` only when every rule passed. |
+| `404 Not Found` | No candidature with that id (or a malformed id). |
+
 ## Testing
 
 Philosophy: **no internal mocks** — only external boundaries would be mocked (there are none yet).
@@ -197,7 +227,7 @@ This repo is built capability by capability (Spec-Driven Development; see `opens
 | # | Capability | Status |
 |---|---|---|
 | 1 | `candidature-registration` | ✅ Implemented |
-| 2 | `candidature-validation` (Chain of Responsibility) | ⬜ Planned |
+| 2 | `candidature-validation` (extensible rule pipeline) | ✅ Implemented |
 | 3 | `evaluator-assignment` | ⬜ Planned |
 | 4 | `consolidated-listing` (complex SQL) | ⬜ Planned |
 | 5 | `candidature-summary` (Collections) | ⬜ Planned |

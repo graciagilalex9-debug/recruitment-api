@@ -26,6 +26,13 @@ final readonly class EloquentCandidatureRepository implements CandidatureReposit
         return new CandidatureId((string) Str::ulid());
     }
 
+    public function findById(CandidatureId $id): ?Candidature
+    {
+        $model = CandidatureModel::find($id->value());
+
+        return $model === null ? null : $this->mapper->toDomain($model);
+    }
+
     public function existsByEmail(Email $email): bool
     {
         return CandidatureModel::query()

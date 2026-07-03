@@ -24,9 +24,17 @@ final class InMemoryCandidatureRepository implements CandidatureRepository
     /** @var array<string, Candidature> keyed by normalized email */
     private array $byEmail = [];
 
+    /** @var array<string, Candidature> keyed by id */
+    private array $byId = [];
+
     public function nextIdentity(): CandidatureId
     {
         return new CandidatureId((string) Str::ulid());
+    }
+
+    public function findById(CandidatureId $id): ?Candidature
+    {
+        return $this->byId[$id->value()] ?? null;
     }
 
     public function existsByEmail(Email $email): bool
@@ -43,6 +51,7 @@ final class InMemoryCandidatureRepository implements CandidatureRepository
         }
 
         $this->byEmail[$key] = $candidature;
+        $this->byId[$candidature->id()->value()] = $candidature;
     }
 
     public function count(): int
