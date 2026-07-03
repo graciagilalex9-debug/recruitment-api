@@ -1,0 +1,10 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 8
+    paths:
+        - app
+    # The domain must stay pure: no Eloquent/Illuminate leaking into Domain layers.
+    # (A dedicated boundary check — e.g. Deptrac — can be added later; for now level 8
+    #  on the whole app catches type/nullsafety issues from day one.)

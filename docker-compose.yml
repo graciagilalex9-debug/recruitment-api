@@ -1,0 +1,131 @@
+# ---------------------------------------------------------------------------
+# Recruitment API — local stack.
+#   nginx  -> app (php-fpm)      HTTP API on http://localhost:8080
+#   worker -> queue:work        async Excel report + email notification
+#   mysql                        dev database (writes via Eloquent)
+#   redis                        cache + queue backend
+#   mailpit                      catches outgoing mail, UI on http://localhost:8025
+#
+# Tests use SQLite (in-memory / file) inside the app container — no service here.
+# ---------------------------------------------------------------------------
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    image: recruitment-api/php
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ./:/var/www/html
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - recruitment
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./:/var/www/html:ro
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
+    networks:
+      - recruitment
+
+  worker:
+    image: recruitment-api/php
+    restart: unless-stopped
+    working_dir: /var/www/html
+    # --tries/--backoff give us retry semantics; we'll lean on this for
+    # idempotency + resilience in the report/notification jobs.
+    command: php artisan queue:work redis --tries=3 --backoff=5 --max-time=3600
+    volumes:
+      - ./:/var/www/html
+    depends_on:
+      app:
+        condition: service_started
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - recruitment
+
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-recruitment}
+      MYSQL_USER: ${DB_USERNAME:-recruitment}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-secret}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DB_ROOT_PASSWORD:-root}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - recruitment
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - recruitment
+
+  # Dedicated, isolated database for integration tests.
+  # Data lives on tmpfs (RAM): fast and ephemeral (wiped on restart, always clean).
+  # Completely separate from the dev `mysql` service — tests can never touch dev data.
+  mysql-test:
+    image: mysql:8.4
+    restart: unless-stopped
+    ports:
+      - "3307:3306"   # exposed on a different host port for debugging
+    environment:
+      MYSQL_DATABASE: recruitment_test
+      MYSQL_USER: recruitment
+      MYSQL_PASSWORD: secret
+      MYSQL_ROOT_PASSWORD: root
+    tmpfs:
+      - /var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - recruitment
+
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "1025:1025"   # SMTP (Laravel sends here)
+      - "8025:8025"   # Web UI (you read mail here)
+    networks:
+      - recruitment
+
+networks:
+  recruitment:
+    driver: bridge
+
+volumes:
+  mysql-data:
+    driver: local

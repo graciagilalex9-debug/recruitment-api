@@ -1,0 +1,74 @@
+# Manual HTTP calls for the Candidature API — these hit the RUNNING app (dev database).
+# Run each request with the green ▶ in PhpStorm. Pick the "dev" environment (top-right).
+# For automated, repeatable checks against the isolated test DB, see tests/Feature/Candidature.
+
+### Register a valid candidature (expect 201 Created)
+POST {{baseUrl}}/candidatures
+Content-Type: application/json
+Accept: application/json
+
+{
+  "full_name": "Ada Lovelace",
+  "email": "ada@example.com",
+  "years_of_experience": 7,
+  "cv": "Mathematician and first programmer."
+}
+
+### Register the same email again (expect 409 Conflict)
+POST {{baseUrl}}/candidatures
+Content-Type: application/json
+Accept: application/json
+
+{
+  "full_name": "Ada Again",
+  "email": "ada@example.com",
+  "years_of_experience": 3,
+  "cv": "Duplicate."
+}
+
+### Same email in UPPERCASE (expect 409 Conflict — uniqueness is case-insensitive)
+POST {{baseUrl}}/candidatures
+Content-Type: application/json
+Accept: application/json
+
+{
+  "full_name": "Ada Upper",
+  "email": "ADA@EXAMPLE.COM",
+  "years_of_experience": 3,
+  "cv": "Duplicate."
+}
+
+### Malformed email (expect 422 Unprocessable Entity)
+POST {{baseUrl}}/candidatures
+Content-Type: application/json
+Accept: application/json
+
+{
+  "full_name": "Bad Email",
+  "email": "not-an-email",
+  "years_of_experience": 2,
+  "cv": "..."
+}
+
+### Negative years of experience (expect 422 Unprocessable Entity)
+POST {{baseUrl}}/candidatures
+Content-Type: application/json
+Accept: application/json
+
+{
+  "full_name": "Negative Years",
+  "email": "neg@example.com",
+  "years_of_experience": -1,
+  "cv": "..."
+}
+
+### Missing required field: no email (expect 422 Unprocessable Entity)
+POST {{baseUrl}}/candidatures
+Content-Type: application/json
+Accept: application/json
+
+{
+  "full_name": "No Email",
+  "years_of_experience": 4,
+  "cv": "..."
+}

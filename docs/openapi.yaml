@@ -1,0 +1,124 @@
+openapi: 3.1.0
+info:
+  title: Recruitment API
+  version: 1.0.0
+  description: >
+    API to manage job candidatures and evaluators.
+    This file is the source of truth for the HTTP contract (spec-first): the code is
+    implemented to satisfy it. Each capability adds its endpoints here.
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+tags:
+  - name: Candidatures
+    description: Registering and managing candidatures
+
+paths:
+  /candidatures:
+    post:
+      tags: [Candidatures]
+      summary: Register a candidature
+      operationId: registerCandidature
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterCandidatureRequest'
+      responses:
+        '201':
+          description: The candidature was registered.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CandidatureResource'
+        '409':
+          description: A candidature with this email already exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '422':
+          description: The input is missing required fields or is malformed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+
+components:
+  schemas:
+    RegisterCandidatureRequest:
+      type: object
+      required: [full_name, email, years_of_experience, cv]
+      properties:
+        full_name:
+          type: string
+          maxLength: 255
+          example: Ada Lovelace
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          example: ada@example.com
+        years_of_experience:
+          type: integer
+          minimum: 0
+          example: 7
+        cv:
+          type: string
+          example: Mathematician and first programmer.
+
+    CandidatureResource:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Candidature'
+
+    Candidature:
+      type: object
+      properties:
+        id:
+          type: string
+          description: ULID
+          example: 01J9Z8K3Q7R5X2M4B6T8V0W1C2
+        full_name:
+          type: string
+          example: Ada Lovelace
+        email:
+          type: string
+          format: email
+          example: ada@example.com
+        years_of_experience:
+          type: integer
+          example: 7
+        cv:
+          type: string
+          example: Mathematician and first programmer.
+        created_at:
+          type: string
+          format: date-time
+          example: '2026-07-03T18:30:00+00:00'
+
+    ErrorMessage:
+      type: object
+      properties:
+        message:
+          type: string
+          example: A candidature with email ada@example.com already exists.
+
+    ValidationError:
+      type: object
+      properties:
+        message:
+          type: string
+          example: The email field must be a valid email address.
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          example:
+            email:
+              - The email field must be a valid email address.
