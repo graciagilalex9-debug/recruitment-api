@@ -15,7 +15,7 @@ use App\Candidature\Domain\ValueObject\CandidatureId;
  * Loads the candidature via the repository port (404 if absent), runs the domain
  * validator, and returns a primitive DTO. Depends on the domain interfaces only.
  */
-final readonly class CandidatureValidationFinder
+final readonly class CandidatureValidationFinder implements CandidatureValidationReader
 {
     public function __construct(
         private CandidatureRepository $repository,

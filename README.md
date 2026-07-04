@@ -327,6 +327,11 @@ make test
 The infrastructure for horizontal scaling is in place and used as capabilities land:
 
 - **Redis** — cache and queue backend.
+- **Response caching** — the consolidated listing and the validation report are served from Redis via
+  caching decorators over their read ports. The listing is invalidated with a **version-key** bumped on
+  every assignment write (O(1), no key scan); the validation report uses a long TTL (candidatures are
+  immutable). TTLs live in `config/performance.php`. Measured ~588× faster on a cache hit — see
+  `docs/performance-notes.md`.
 - **Queue worker** — a dedicated container (`queue:work redis --tries=3 --backoff=5`) for async work
   (used by the Excel report generation + email notification).
 - **Idempotency & concurrency** — email uniqueness is already race-safe via the DB unique constraint;
@@ -346,4 +351,4 @@ This repo is built capability by capability (Spec-Driven Development; see `opens
 | 4 | `consolidated-listing` (complex SQL) | ✅ Implemented |
 | 5 | `candidature-summary` (Collections) | ✅ Implemented |
 | 6 | `excel-report` (queue + email + PhpSpreadsheet) | ✅ Implemented |
-| 7 | `scalability` hardening | ⬜ Planned |
+| 7 | `scalability` hardening (caching ✓ · idempotency · locks · keyset) | 🚧 In progress |

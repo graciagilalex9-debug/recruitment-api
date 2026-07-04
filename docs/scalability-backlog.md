@@ -12,22 +12,18 @@ we get there nothing is forgotten. PDF #7 asks for: **cache, queues, idempotency
 
 ## 1. Caching (read-heavy endpoints)
 
-### 1.1 Cache the candidature validation report
-- **What:** `GET /candidatures/{id}/validation` recomputes the rules on every call.
-- **Why deferred:** correctness first; caching adds invalidation concerns.
-- **From:** capability #2 (candidature-validation).
-- **Approach:** `Cache::remember("candidature-validation:{id}", ttl, …)` in Redis. Safe **because
-  candidatures are immutable** (insert-only) → the report is stable. ⚠️ If we ever add candidature
-  **states** (mutability), we must invalidate this key on change.
+### 1.1 Cache the candidature validation report — DONE (baseline, #7 slice 1)
+- **Status:** implemented as a caching decorator over the validation read port
+  (`CachingCandidatureValidationReader`), `candidature-validation:{id}` in Redis, long TTL
+  (`config/performance.php`), no invalidation — safe because candidatures are immutable.
+- ⚠️ If candidature **states** (mutability) are ever added, this key must be invalidated on change.
 
-### 1.2 Cache the consolidated listing
-- **What:** `GET /candidatures/consolidated` runs joins + a `GROUP_CONCAT`/`COUNT` derived table on
-  every request.
-- **Why deferred:** the query is correct but heavy; caching needs an invalidation strategy.
-- **From:** capability #4 (consolidated-listing).
-- **Approach:** cache per (filter+sort+page) key in Redis with a short TTL, or invalidate on any new
-  assignment/candidature. Consider a **materialized view / summary table** refreshed on write for the
-  per-evaluator aggregates.
+### 1.2 Cache the consolidated listing — DONE (baseline, #7 slice 1)
+- **Status:** implemented as a caching decorator over `ConsolidatedListingReader`, keyed per
+  (filter+sort+page) and namespaced by a **version-key** (`consolidated-listing:v{N}:…`) that a
+  decorator over `AssignmentRepository` bumps (`INCR`) on every assignment write → O(1) invalidation.
+  Safety TTL from config. Measured ~588× faster on a hit (see `docs/performance-notes.md`).
+- **What remains at real scale → §6 below.**
 
 ## 2. Queues (offload slow work)
 
@@ -139,6 +135,24 @@ we get there nothing is forgotten. PDF #7 asks for: **cache, queues, idempotency
 - **Why deferred:** the failure is recorded (status `failed` + reason); proactive alerting is extra.
 - **Approach:** also notify the requester on terminal failure; tune `--tries/--backoff`, add a
   dead-letter/failed-jobs review, and (with §5.3) capture the actual requester identity to address.
+
+## 6. Caching at real scale (remaining, from #7 slice 1)
+
+### 6.1 Per-evaluator summary table / materialized aggregates
+- **What:** the `GROUP_CONCAT`/`COUNT` derived table still runs on every cache **miss** (~38 ms).
+- **Approach:** maintain a per-evaluator summary row (total + emails) updated on assignment write, so
+  even a miss is a cheap indexed read; removes the filesort on aggregate sort (§4.2) too.
+
+### 6.2 Cache stampede protection on miss
+- **What:** when a hot key expires (or the version bumps), N concurrent requests all miss and recompute
+  the same query at once.
+- **Approach:** a short lock around the recompute (`Cache::lock`) or `Cache::remember`-with-lock so only
+  one request rebuilds while others wait/serve stale. Ties into slice 3 (locks).
+
+### 6.3 Validation-cache invalidation if candidatures become mutable
+- **What:** the validation cache has no invalidation (relies on immutability).
+- **Approach:** if candidature **states** are ever added, invalidate `candidature-validation:{id}` on
+  change (or version-key it like the listing).
 
 ---
 
