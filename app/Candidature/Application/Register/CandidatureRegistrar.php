@@ -21,10 +21,10 @@ use DateTimeImmutable;
  * port, and returns a primitive DTO. It depends on the CandidatureRepository interface,
  * never on Eloquent.
  */
-final class CandidatureRegistrar
+final readonly class CandidatureRegistrar
 {
     public function __construct(
-        private readonly CandidatureRepository $repository,
+        private CandidatureRepository $repository,
     ) {}
 
     public function register(RegisterCandidatureCommand $command): CandidatureResponse

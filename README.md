@@ -196,6 +196,32 @@ curl http://localhost:8080/candidatures/01J9Z8K3Q7R5X2M4B6T8V0W1C2/validation \
 | `200 OK` | Report returned; `valid` is `true` only when every rule passed. |
 | `404 Not Found` | No candidature with that id (or a malformed id). |
 
+### `POST /evaluators`
+
+Creates an evaluator (`{ "name": "Grace Hopper" }`). Returns `201` with the evaluator, or `422` for a
+missing name.
+
+### `PUT /candidatures/{id}/evaluator`
+
+Assigns an evaluator to a candidature and records the assignment date. One evaluator can handle many
+candidatures; a candidature has at most one evaluator (calling it again reassigns).
+
+```bash
+curl -X PUT http://localhost:8080/candidatures/{id}/evaluator \
+  -H "Content-Type: application/json" -H "Accept: application/json" \
+  -d '{ "evaluator_id": "01J9ZC5K3Q7R5X2M4B6T8V0W1C2" }'
+```
+
+| Status | When |
+|---|---|
+| `200 OK` | Assigned; body reports the candidature, evaluator and assignment date. |
+| `404 Not Found` | The candidature or the evaluator does not exist. |
+| `409 Conflict` | The candidature is not eligible (fails its validation rules). *Our own gate — see the change's design.* |
+| `422 Unprocessable Entity` | Missing or malformed `evaluator_id`. |
+
+> Assignment reuses the candidature-validation rules: **only eligible candidatures can be assigned**.
+> The assignment lives in its own `assignments` table, so the candidature stays immutable.
+
 ## Testing
 
 Philosophy: **no internal mocks** — only external boundaries would be mocked (there are none yet).
@@ -228,7 +254,7 @@ This repo is built capability by capability (Spec-Driven Development; see `opens
 |---|---|---|
 | 1 | `candidature-registration` | ✅ Implemented |
 | 2 | `candidature-validation` (extensible rule pipeline) | ✅ Implemented |
-| 3 | `evaluator-assignment` | ⬜ Planned |
+| 3 | `evaluator-management` + `evaluator-assignment` | ✅ Implemented |
 | 4 | `consolidated-listing` (complex SQL) | ⬜ Planned |
 | 5 | `candidature-summary` (Collections) | ⬜ Planned |
 | 6 | `excel-report` (queue + email) | ⬜ Planned |

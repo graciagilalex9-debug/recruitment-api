@@ -73,6 +73,76 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorMessage'
 
+  /evaluators:
+    post:
+      tags: [Evaluators]
+      summary: Create an evaluator
+      operationId: createEvaluator
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEvaluatorRequest'
+      responses:
+        '201':
+          description: The evaluator was created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluatorResource'
+        '422':
+          description: Missing or malformed name.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+
+  /candidatures/{id}/evaluator:
+    put:
+      tags: [Candidatures]
+      summary: Assign an evaluator to a candidature
+      operationId: assignEvaluator
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Candidature ULID
+          schema:
+            type: string
+          example: 01J9Z8K3Q7R5X2M4B6T8V0W1C2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignEvaluatorRequest'
+      responses:
+        '200':
+          description: The evaluator was assigned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssignmentResource'
+        '404':
+          description: Candidature or evaluator not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '409':
+          description: The candidature is not eligible for assignment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '422':
+          description: Missing or malformed evaluator_id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+
 components:
   schemas:
     RegisterCandidatureRequest:
@@ -159,6 +229,62 @@ components:
         reason:
           type: string
           example: 'Requires at least 2 years of experience; has 1.'
+
+    CreateEvaluatorRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          maxLength: 255
+          example: Grace Hopper
+
+    EvaluatorResource:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Evaluator'
+
+    Evaluator:
+      type: object
+      properties:
+        id:
+          type: string
+          example: 01J9ZC5K3Q7R5X2M4B6T8V0W1C2
+        name:
+          type: string
+          example: Grace Hopper
+        created_at:
+          type: string
+          format: date-time
+
+    AssignEvaluatorRequest:
+      type: object
+      required: [evaluator_id]
+      properties:
+        evaluator_id:
+          type: string
+          description: Evaluator ULID
+          example: 01J9ZC5K3Q7R5X2M4B6T8V0W1C2
+
+    AssignmentResource:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Assignment'
+
+    Assignment:
+      type: object
+      properties:
+        candidature_id:
+          type: string
+          example: 01J9Z8K3Q7R5X2M4B6T8V0W1C2
+        evaluator_id:
+          type: string
+          example: 01J9ZC5K3Q7R5X2M4B6T8V0W1C2
+        assigned_at:
+          type: string
+          format: date-time
 
     ErrorMessage:
       type: object
