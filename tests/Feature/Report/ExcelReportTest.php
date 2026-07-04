@@ -124,7 +124,7 @@ final class ExcelReportTest extends TestCase
 
         $this->postJson('/candidatures/consolidated/export')->assertStatus(202);
 
-        Mail::assertSent(ReportReadyMail::class);
+        Mail::assertQueued(ReportReadyMail::class);
     }
 
     public function test_the_status_of_an_unknown_report_is_not_found(): void

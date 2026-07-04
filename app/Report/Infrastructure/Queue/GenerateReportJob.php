@@ -29,6 +29,11 @@ final class GenerateReportJob implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
+    /** Retry a transient failure up to 3 times, waiting 5s between attempts. */
+    public int $tries = 3;
+
+    public int $backoff = 5;
+
     public function __construct(
         private readonly string $reportId,
     ) {}

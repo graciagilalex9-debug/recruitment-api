@@ -24,7 +24,9 @@ final readonly class MailReportNotifier implements ReportNotifier
     {
         $downloadUrl = route('reports.download', ['id' => $report->id()->value()]);
 
-        Mail::to(self::RECIPIENT)->send(
+        // Queue the mail (the Mailable is Queueable): the report generation already runs on a
+        // worker, and queueing keeps the SMTP round-trip off the generation path.
+        Mail::to(self::RECIPIENT)->queue(
             new ReportReadyMail($report->id()->value(), $downloadUrl),
         );
     }
