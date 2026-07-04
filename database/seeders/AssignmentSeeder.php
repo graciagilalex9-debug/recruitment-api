@@ -15,6 +15,10 @@ use Illuminate\Database\Seeder;
  * eligible candidatures (>= 2 years of experience) are assigned, and some are left
  * unassigned so the listing's "excludes unassigned" behaviour is visible too. Candidatures
  * are spread round-robin across evaluators to populate the per-evaluator COUNT/GROUP_CONCAT.
+ *
+ * Idempotent: it only considers candidatures that are NOT already assigned, so re-running the
+ * seeders (`migrate --seed` more than once) never violates the one-assignment-per-candidature
+ * unique index — it simply assigns any remaining unassigned eligible ones (or nothing).
  */
 final class AssignmentSeeder extends Seeder
 {
@@ -28,6 +32,9 @@ final class AssignmentSeeder extends Seeder
 
         $eligible = CandidatureModel::query()
             ->where('years_of_experience', '>=', 2)
+            ->whereNotIn('id', function ($query): void {
+                $query->select('candidature_id')->from('assignments');
+            })
             ->inRandomOrder()
             ->limit(15)
             ->get();

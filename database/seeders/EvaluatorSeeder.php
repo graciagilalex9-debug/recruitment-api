@@ -11,6 +11,11 @@ final class EvaluatorSeeder extends Seeder
 {
     public function run(): void
     {
+        // Idempotent: don't pile up more sample data if it's already seeded.
+        if (EvaluatorModel::query()->exists()) {
+            return;
+        }
+
         EvaluatorModel::factory()->count(5)->create();
     }
 }
