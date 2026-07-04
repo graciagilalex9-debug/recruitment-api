@@ -238,6 +238,26 @@ curl -X POST http://localhost:8080/candidatures/auto-assign -H "Accept: applicat
 | `200 OK` | Summary of the run (`assigned`, `skipped_ineligible`); `0` assigned when there is nothing to do. |
 | `409 Conflict` | There are eligible candidatures to assign but no evaluators exist. |
 
+### `GET /candidatures/consolidated`
+
+The consolidated view: every candidature that has an evaluator, with the evaluator's name, the
+assignment date, the **total candidatures** that evaluator handles and the **concatenated emails** of
+their candidates. Sortable, filterable and paginated.
+
+```bash
+curl "http://localhost:8080/candidatures/consolidated?sort=evaluator_name&direction=asc&filter[full_name]=Ada&per_page=15" \
+  -H "Accept: application/json"
+```
+
+- **Sort:** `sort=<column>&direction=asc|desc` (default `years_of_experience` desc). Columns:
+  `full_name`, `email`, `years_of_experience`, `evaluator_name`, `assigned_at`, `evaluator_total`.
+- **Filter:** `filter[<column>]=<value>` — **exact** for number/date, **prefix** (`value%`) for text.
+- **Pagination:** `page`, `per_page` (default 15, max 100); response carries `data[]` + `meta{}`.
+- **Performance:** the default sort uses an index (backward index scan, no filesort); joins are unique/PK
+  lookups; text filters stay index-friendly (no `%contains%`). The per-evaluator aggregate
+  (`GROUP_CONCAT`/`COUNT`) is the one heavy part at very large scale — see `docs/scalability-backlog.md`.
+- **`422`** on an unknown sort column or invalid params.
+
 ## Testing
 
 Philosophy: **no internal mocks** — only external boundaries would be mocked (there are none yet).
@@ -272,7 +292,7 @@ This repo is built capability by capability (Spec-Driven Development; see `opens
 | 2 | `candidature-validation` (extensible rule pipeline) | ✅ Implemented |
 | 3 | `evaluator-management` + `evaluator-assignment` | ✅ Implemented |
 | + | `auto-assignment` (least-loaded bulk, beyond the brief) | ✅ Implemented |
-| 4 | `consolidated-listing` (complex SQL) | ⬜ Planned |
+| 4 | `consolidated-listing` (complex SQL) | ✅ Implemented |
 | 5 | `candidature-summary` (Collections) | ⬜ Planned |
 | 6 | `excel-report` (queue + email) | ⬜ Planned |
 | 7 | `scalability` hardening | ⬜ Planned |

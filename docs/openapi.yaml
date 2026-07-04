@@ -162,6 +162,57 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorMessage'
 
+  /candidatures/consolidated:
+    get:
+      tags: [Candidatures]
+      summary: Consolidated listing of assigned candidatures (sortable, filterable, paginated)
+      operationId: consolidatedListing
+      parameters:
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [full_name, email, years_of_experience, evaluator_name, assigned_at, evaluator_total]
+            default: years_of_experience
+        - name: direction
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 15 }
+        - name: filter
+          in: query
+          style: deepObject
+          explode: true
+          description: "Filter by a listed column, e.g. filter[full_name]=Ada (prefix for text, exact for number/date)."
+          schema:
+            type: object
+            properties:
+              full_name: { type: string }
+              email: { type: string }
+              evaluator_name: { type: string }
+              years_of_experience: { type: integer }
+              assigned_at: { type: string }
+      responses:
+        '200':
+          description: A page of the consolidated listing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsolidatedListing'
+        '422':
+          description: Invalid sort / direction / pagination parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+
 components:
   schemas:
     RegisterCandidatureRequest:
@@ -317,6 +368,32 @@ components:
             skipped_ineligible:
               type: integer
               example: 2
+
+    ConsolidatedListing:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsolidatedRow'
+        meta:
+          type: object
+          properties:
+            current_page: { type: integer, example: 1 }
+            per_page: { type: integer, example: 15 }
+            total: { type: integer, example: 42 }
+            last_page: { type: integer, example: 3 }
+
+    ConsolidatedRow:
+      type: object
+      properties:
+        full_name: { type: string, example: Ada Lovelace }
+        email: { type: string, example: ada@example.com }
+        years_of_experience: { type: integer, example: 9 }
+        evaluator_name: { type: string, example: Grace Hopper }
+        assigned_at: { type: string, format: date-time }
+        evaluator_total: { type: integer, example: 3 }
+        evaluator_candidate_emails: { type: string, example: "ada@example.com,alan@example.com" }
 
     ErrorMessage:
       type: object

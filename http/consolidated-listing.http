@@ -1,0 +1,36 @@
+# Manual HTTP calls for the consolidated listing — hit the RUNNING app (dev database).
+# Pick the "dev" environment. GET /candidatures/consolidated returns { data[], meta{} }.
+# Only candidatures WITH an evaluator appear. Each row carries the evaluator's total and
+# the concatenated emails of that evaluator's candidates.
+
+### Default listing (order: years_of_experience desc, page 1, 15 per page)
+GET {{baseUrl}}/candidatures/consolidated
+Accept: application/json
+
+### Order by evaluator name, ascending
+GET {{baseUrl}}/candidatures/consolidated?sort=evaluator_name&direction=asc
+Accept: application/json
+
+### Order by the per-evaluator total (an aggregate), descending
+GET {{baseUrl}}/candidatures/consolidated?sort=evaluator_total&direction=desc
+Accept: application/json
+
+### Filter by candidate name prefix (index-friendly LIKE 'A%')
+GET {{baseUrl}}/candidatures/consolidated?filter[full_name]=A
+Accept: application/json
+
+### Filter by exact years of experience
+GET {{baseUrl}}/candidatures/consolidated?filter[years_of_experience]=9
+Accept: application/json
+
+### Pagination: 5 per page, page 2
+GET {{baseUrl}}/candidatures/consolidated?per_page=5&page=2
+Accept: application/json
+
+### Combined: filter + sort + pagination
+GET {{baseUrl}}/candidatures/consolidated?filter[evaluator_name]=A&sort=years_of_experience&direction=desc&per_page=5
+Accept: application/json
+
+### Invalid sort column (expect 422)
+GET {{baseUrl}}/candidatures/consolidated?sort=drop_table
+Accept: application/json
