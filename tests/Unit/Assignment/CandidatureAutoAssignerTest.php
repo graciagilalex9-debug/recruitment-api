@@ -15,6 +15,7 @@ use Illuminate\Support\Str;
 use PHPUnit\Framework\TestCase;
 use Tests\Support\CandidatureMother;
 use Tests\Support\FakePendingAssignmentReader;
+use Tests\Support\ImmediateMutex;
 use Tests\Support\InMemoryAssignmentRepository;
 
 final class CandidatureAutoAssignerTest extends TestCase
@@ -32,6 +33,7 @@ final class CandidatureAutoAssignerTest extends TestCase
             $reader,
             $this->assignments,
             new CandidatureValidator([new MustHaveCv, new MustHaveValidEmail, new MustHaveMinimumExperience]),
+            new ImmediateMutex,
         );
     }
 

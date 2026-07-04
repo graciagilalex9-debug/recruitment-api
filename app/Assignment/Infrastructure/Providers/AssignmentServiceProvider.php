@@ -6,9 +6,11 @@ namespace App\Assignment\Infrastructure\Providers;
 
 use App\Assignment\Application\Consolidated\ConsolidatedListingReader;
 use App\Assignment\Application\Consolidated\ConsolidatedListingStreamReader;
+use App\Assignment\Application\Lock\Mutex;
 use App\Assignment\Domain\AssignmentRepository;
 use App\Assignment\Domain\PendingAssignmentReader;
 use App\Assignment\Infrastructure\Cache\ConsolidatedListingCache;
+use App\Assignment\Infrastructure\Lock\LaravelMutex;
 use App\Assignment\Infrastructure\Persistence\CachingAssignmentRepository;
 use App\Assignment\Infrastructure\Persistence\CachingConsolidatedListingReader;
 use App\Assignment\Infrastructure\Persistence\EloquentAssignmentRepository;
@@ -23,6 +25,7 @@ final class AssignmentServiceProvider extends ServiceProvider
     {
         $this->app->bind(PendingAssignmentReader::class, QueryBuilderPendingAssignmentReader::class);
         $this->app->bind(ConsolidatedListingStreamReader::class, QueryBuilderConsolidatedListingStreamReader::class);
+        $this->app->bind(Mutex::class, LaravelMutex::class);
 
         // Writes go through a caching decorator that invalidates the listing cache on save().
         $this->app->bind(AssignmentRepository::class, fn ($app): AssignmentRepository => new CachingAssignmentRepository(

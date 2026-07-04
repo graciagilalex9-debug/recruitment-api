@@ -37,4 +37,17 @@ return [
 
     'idempotency_ttl' => (int) env('IDEMPOTENCY_TTL', 86400),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Bulk auto-assign lock (capability #7 slice 3)
+    |--------------------------------------------------------------------------
+    |
+    | How long the exclusive 'auto-assign' lock is held at most. It is released as
+    | soon as a run finishes; this TTL only auto-releases it if the process crashes
+    | mid-run, so it must exceed the longest expected bulk run.
+    |
+    */
+
+    'auto_assign_lock_ttl' => (int) env('AUTO_ASSIGN_LOCK_TTL', 120),
+
 ];

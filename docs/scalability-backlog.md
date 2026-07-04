@@ -46,13 +46,12 @@ we get there nothing is forgotten. PDF #7 asks for: **cache, queues, idempotency
 
 ## 3. Concurrency & idempotency
 
-### 3.1 Concurrent bulk auto-assign runs
-- **What:** two simultaneous `auto-assign` calls could double-process / unbalance.
-- **Why deferred:** single assignments are already race-safe (see 3.2); concurrent *bulk* runs are the
-  gap.
-- **From:** auto-assignment capability.
-- **Approach:** a lock (`Cache::lock('auto-assign')`) so only one bulk run executes at a time, or make
-  the job idempotent and queued (serialized on one queue).
+### 3.1 Concurrent bulk auto-assign runs — DONE (baseline, #7 slice 3)
+- **Status:** the whole bulk operation runs under an exclusive lock. `CandidatureAutoAssigner` wraps
+  its work in a `Mutex` port (`App\Assignment\Application\Lock\Mutex`), implemented by `LaravelMutex`
+  (`Cache::lock('auto-assign', ttl)`, non-blocking, released in a `finally`, TTL in
+  `config/performance.php`). A concurrent request fails fast with `AutoAssignInProgress` → `409`.
+- **Remaining:** making the bulk **asynchronous** (queue it, return `202`) for very large backlogs — §2.2.
 
 ### 3.2 Single-assignment race safety — ALREADY DONE (baseline)
 - **What:** two requests assigning the same candidature concurrently.

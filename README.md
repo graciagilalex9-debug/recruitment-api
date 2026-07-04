@@ -339,7 +339,8 @@ The infrastructure for horizontal scaling is in place and used as capabilities l
   concurrent same-key requests → `409`, and a key reused with a different body → `422`). Applied to the
   export; `POST /candidatures` is already idempotent via its unique email.
 - **Concurrency** — single assignments are race-safe via the `assignments.candidature_id` unique
-  index; bulk-assignment locking and keyset pagination are the remaining #7 slices.
+  index; the **bulk auto-assign** runs under an exclusive Redis lock (a `Mutex` port), so only one runs
+  at a time and a concurrent request gets `409`. Keyset pagination is the remaining #7 slice.
 - **Mailpit** — captures outgoing mail in development.
 
 ## Roadmap
@@ -355,4 +356,4 @@ This repo is built capability by capability (Spec-Driven Development; see `opens
 | 4 | `consolidated-listing` (complex SQL) | ✅ Implemented |
 | 5 | `candidature-summary` (Collections) | ✅ Implemented |
 | 6 | `excel-report` (queue + email + PhpSpreadsheet) | ✅ Implemented |
-| 7 | `scalability` hardening (caching ✓ · idempotency ✓ · locks · keyset) | 🚧 In progress |
+| 7 | `scalability` hardening (caching ✓ · idempotency ✓ · locks ✓ · keyset) | 🚧 In progress |

@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace App\Assignment\Application\AutoAssign;
 
+use App\Assignment\Application\Lock\LockNotAcquired;
+use App\Assignment\Application\Lock\Mutex;
 use App\Assignment\Domain\Assignment;
 use App\Assignment\Domain\AssignmentRepository;
+use App\Assignment\Domain\Exception\AutoAssignInProgress;
 use App\Assignment\Domain\Exception\NoEvaluatorsAvailable;
 use App\Assignment\Domain\PendingAssignmentReader;
 use App\Candidature\Domain\Candidature;
@@ -22,13 +25,30 @@ use DateTimeImmutable;
  */
 final readonly class CandidatureAutoAssigner
 {
+    private const LOCK = 'auto-assign';
+
     public function __construct(
         private PendingAssignmentReader $reader,
         private AssignmentRepository $assignments,
         private CandidatureValidator $validator,
+        private Mutex $mutex,
     ) {}
 
+    /**
+     * Serialize the whole bulk operation: reading the backlog and distributing it is not
+     * atomic, so two concurrent runs would work from the same snapshot and collide. Only one
+     * runs at a time; a concurrent request fails fast with AutoAssignInProgress (409).
+     */
     public function assignAll(): AutoAssignmentResponse
+    {
+        try {
+            return $this->mutex->withLock(self::LOCK, fn (): AutoAssignmentResponse => $this->run());
+        } catch (LockNotAcquired) {
+            throw new AutoAssignInProgress;
+        }
+    }
+
+    private function run(): AutoAssignmentResponse
     {
         $loads = $this->reader->evaluatorLoads();
         $candidatures = $this->reader->unassignedCandidatures();

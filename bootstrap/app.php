@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Assignment\Domain\Exception\AutoAssignInProgress;
 use App\Assignment\Domain\Exception\CandidatureNotEligible;
 use App\Assignment\Domain\Exception\NoEvaluatorsAvailable;
 use App\Candidature\Domain\Exception\CandidatureAlreadyExists;
@@ -55,5 +56,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // Bulk auto-assign with no evaluators to distribute to is a business conflict.
         $exceptions->render(
             fn (NoEvaluatorsAvailable $e) => response()->json(['message' => $e->getMessage()], 409),
+        );
+
+        // A second bulk auto-assign while one is already running is a business conflict.
+        $exceptions->render(
+            fn (AutoAssignInProgress $e) => response()->json(['message' => $e->getMessage()], 409),
         );
     })->create();
