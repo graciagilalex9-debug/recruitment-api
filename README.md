@@ -334,8 +334,12 @@ The infrastructure for horizontal scaling is in place and used as capabilities l
   `docs/performance-notes.md`.
 - **Queue worker** — a dedicated container (`queue:work redis --tries=3 --backoff=5`) for async work
   (used by the Excel report generation + email notification).
-- **Idempotency & concurrency** — email uniqueness is already race-safe via the DB unique constraint;
-  bulk-assignment concurrency and idempotency are addressed in later capabilities.
+- **Idempotency** — write endpoints without a natural key support safe retries via an optional
+  `Idempotency-Key` header (a reusable middleware stores/replays the response in Redis; a lock guards
+  concurrent same-key requests → `409`, and a key reused with a different body → `422`). Applied to the
+  export; `POST /candidatures` is already idempotent via its unique email.
+- **Concurrency** — single assignments are race-safe via the `assignments.candidature_id` unique
+  index; bulk-assignment locking and keyset pagination are the remaining #7 slices.
 - **Mailpit** — captures outgoing mail in development.
 
 ## Roadmap
@@ -351,4 +355,4 @@ This repo is built capability by capability (Spec-Driven Development; see `opens
 | 4 | `consolidated-listing` (complex SQL) | ✅ Implemented |
 | 5 | `candidature-summary` (Collections) | ✅ Implemented |
 | 6 | `excel-report` (queue + email + PhpSpreadsheet) | ✅ Implemented |
-| 7 | `scalability` hardening (caching ✓ · idempotency · locks · keyset) | 🚧 In progress |
+| 7 | `scalability` hardening (caching ✓ · idempotency ✓ · locks · keyset) | 🚧 In progress |

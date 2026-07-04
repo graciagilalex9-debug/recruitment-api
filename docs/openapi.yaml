@@ -250,6 +250,17 @@ paths:
         Accepts the same sort/filter parameters as the consolidated listing (no pagination —
         an export covers the full matching set). Records a pending report, schedules its
         background generation and returns 202 immediately; the file is not built inline.
+        Supports safe retries via an optional Idempotency-Key header: a repeat with the same
+        key and body replays the original response instead of creating a new report.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: >
+            Client-generated unique key (e.g. a UUID) for safe retries. A repeat with the same
+            key and body replays the original 202 (same report id); reused with a different body
+            it returns 422; while the first request is still in progress it returns 409.
+          schema: { type: string }
       requestBody:
         required: false
         content:
@@ -281,8 +292,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReportAccepted'
+        '409':
+          description: A request with this Idempotency-Key is already being processed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
         '422':
-          description: Invalid sort / direction / filter parameters.
+          description: >
+            Invalid sort / direction / filter parameters, or the Idempotency-Key was reused with a
+            different request body.
           content:
             application/json:
               schema:

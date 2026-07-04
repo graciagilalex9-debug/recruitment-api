@@ -60,13 +60,14 @@ we get there nothing is forgotten. PDF #7 asks for: **cache, queues, idempotency
   pattern to generalize.
 - **From:** capability #3 (evaluator-assignment).
 
-### 3.3 Idempotency keys for write endpoints
-- **What:** a client retrying a POST shouldn't create duplicates.
-- **Why deferred:** email-uniqueness already prevents duplicate candidatures (a natural idempotency
-  key); a general mechanism wasn't needed yet.
-- **From:** general PDF #7.
-- **Approach:** accept an `Idempotency-Key` header, store processed keys (Redis) with the response,
-  replay on repeat.
+### 3.3 Idempotency keys for write endpoints — DONE (baseline, #7 slice 2)
+- **Status:** a reusable `EnsureIdempotency` middleware (`App\Shared\Infrastructure\Http`) accepts an
+  optional `Idempotency-Key` header, stores the response in Redis (`{status, body, fingerprint}`, TTL
+  from `config/performance.php`) and replays it on retry; a lock guards concurrent same-key requests
+  (`409`), and a reused key with a different body is rejected (`422`). Applied to
+  `POST /candidatures/consolidated/export` (the write endpoint without a natural key).
+- **Note:** `POST /candidatures` is idempotent by its **unique email** (a retry never duplicates), so
+  it needs no explicit key. Extending the middleware to other write endpoints is one line each.
 
 ## 4. Query performance at scale (consolidated listing #4)
 
@@ -122,12 +123,11 @@ we get there nothing is forgotten. PDF #7 asks for: **cache, queues, idempotency
 - **Approach:** store on S3-compatible object storage; hand out time-limited **signed URLs** instead of
   streaming through the app; add download **authorization** (only the requester / allowed roles).
 
-### 5.4 Idempotency & de-duplication of export requests
-- **What:** every `POST /export` creates a new report + job, even for identical criteria in quick
-  succession.
-- **Why deferred:** simple and correct; wasteful under bursts.
-- **Approach:** an idempotency key (or a hash of the criteria within a TTL) that returns the existing
-  in-flight/recent report instead of regenerating (ties into §3.3).
+### 5.4 Idempotency & de-duplication of export requests — DONE (baseline, #7 slice 2)
+- **Status:** `POST /export` honours an `Idempotency-Key` (see §3.3): a retry with the same key+body
+  replays the original `202` (same report id) instead of creating a new report + job.
+- **Remaining:** automatic de-dup by a **hash of the criteria** (without a client-supplied key) so even
+  keyless bursts of identical exports collapse — still deferred.
 
 ### 5.5 Notify on failure, not just completion
 - **What:** an email is sent only when a report completes; a failed report is visible only via

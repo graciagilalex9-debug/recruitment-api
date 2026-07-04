@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Route;
 Route::post('/candidatures', PostCandidatureController::class);
 Route::post('/candidatures/auto-assign', PostCandidatureAutoAssignController::class);
 Route::get('/candidatures/consolidated', GetConsolidatedListingController::class);
-Route::post('/candidatures/consolidated/export', PostConsolidatedReportController::class);
+Route::post('/candidatures/consolidated/export', PostConsolidatedReportController::class)->middleware('idempotent');
 Route::get('/candidatures/{id}/validation', GetCandidatureValidationController::class)->whereUlid('id');
 Route::get('/candidatures/{id}/summary', GetCandidatureSummaryController::class)->whereUlid('id');
 

@@ -45,6 +45,38 @@ Accept: application/json
 
 { "sort": "drop_table" }
 
+
+# =====================================================================
+# Idempotency — retry safely with an Idempotency-Key.
+# Run #1 then #2 with the SAME key+body: #2 replays the SAME report id
+# (response header Idempotency-Replayed: true), no second report created.
+# Run #3 (same key, different body) -> 422.
+# =====================================================================
+
+### 1) Export with an Idempotency-Key (first time -> 202, new report)
+POST {{baseUrl}}/candidatures/consolidated/export
+Content-Type: application/json
+Accept: application/json
+Idempotency-Key: demo-key-001
+
+{ "sort": "years_of_experience", "direction": "desc" }
+
+### 2) Same key + same body -> 202 replayed (same id, header Idempotency-Replayed: true)
+POST {{baseUrl}}/candidatures/consolidated/export
+Content-Type: application/json
+Accept: application/json
+Idempotency-Key: demo-key-001
+
+{ "sort": "years_of_experience", "direction": "desc" }
+
+### 3) Same key + DIFFERENT body -> 422
+POST {{baseUrl}}/candidatures/consolidated/export
+Content-Type: application/json
+Accept: application/json
+Idempotency-Key: demo-key-001
+
+{ "sort": "email" }
+
 ### Status of a well-formed but non-existent report id (expect 404)
 GET {{baseUrl}}/reports/01ARZ3NDEKTSV4RRFFQ69G5FAV
 Accept: application/json

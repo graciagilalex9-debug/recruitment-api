@@ -24,4 +24,17 @@ return [
 
     'validation_cache_ttl' => (int) env('VALIDATION_CACHE_TTL', 86400),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Idempotency (write endpoints, capability #7 slice 2)
+    |--------------------------------------------------------------------------
+    |
+    | How long a processed Idempotency-Key (and its stored response) is kept so
+    | retries can be replayed. Retries happen within minutes; 24h is a safe
+    | upper bound.
+    |
+    */
+
+    'idempotency_ttl' => (int) env('IDEMPOTENCY_TTL', 86400),
+
 ];

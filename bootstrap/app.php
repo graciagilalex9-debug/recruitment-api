@@ -8,6 +8,7 @@ use App\Candidature\Domain\Exception\CandidatureAlreadyExists;
 use App\Candidature\Domain\Exception\CandidatureNotFound;
 use App\Evaluator\Domain\Exception\EvaluatorNotFound;
 use App\Report\Domain\Exception\ReportNotFound;
+use App\Shared\Infrastructure\Http\EnsureIdempotency;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -21,7 +22,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // Opt-in idempotency for write endpoints via the `Idempotency-Key` header.
+        $middleware->alias([
+            'idempotent' => EnsureIdempotency::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // API-only service: always answer errors as JSON.
