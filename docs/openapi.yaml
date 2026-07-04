@@ -13,6 +13,8 @@ servers:
 tags:
   - name: Candidatures
     description: Registering and managing candidatures
+  - name: Reports
+    description: Asynchronous Excel export of the consolidated listing
 
 paths:
   /candidatures:
@@ -239,6 +241,112 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorMessage'
 
+  /candidatures/consolidated/export:
+    post:
+      tags: [Reports]
+      summary: Request an Excel export of the consolidated listing (asynchronous)
+      operationId: exportConsolidatedListing
+      description: >
+        Accepts the same sort/filter parameters as the consolidated listing (no pagination —
+        an export covers the full matching set). Records a pending report, schedules its
+        background generation and returns 202 immediately; the file is not built inline.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sort:
+                  type: string
+                  enum: [full_name, email, years_of_experience, evaluator_name, assigned_at, evaluator_total]
+                  default: years_of_experience
+                direction:
+                  type: string
+                  enum: [asc, desc]
+                  default: desc
+                filter:
+                  type: object
+                  description: "Filter by a listed column, e.g. filter[full_name]=Ada."
+                  properties:
+                    full_name: { type: string }
+                    email: { type: string }
+                    evaluator_name: { type: string }
+                    years_of_experience: { type: integer }
+                    assigned_at: { type: string }
+      responses:
+        '202':
+          description: The export was accepted and its generation scheduled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportAccepted'
+        '422':
+          description: Invalid sort / direction / filter parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+
+  /reports/{id}:
+    get:
+      tags: [Reports]
+      summary: Report status (and a download link once completed)
+      operationId: reportStatus
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Report ULID
+          schema: { type: string }
+          example: 01J9Z8K3Q7R5X2M4B6T8V0W1C2
+      responses:
+        '200':
+          description: The current status of the report.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportStatus'
+        '404':
+          description: No report with that id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+
+  /reports/{id}/download:
+    get:
+      tags: [Reports]
+      summary: Download the generated .xlsx (when completed)
+      operationId: downloadReport
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Report ULID
+          schema: { type: string }
+          example: 01J9Z8K3Q7R5X2M4B6T8V0W1C2
+      responses:
+        '200':
+          description: The generated spreadsheet.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+        '409':
+          description: The report exists but is not yet completed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+        '404':
+          description: No report with that id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+
 components:
   schemas:
     RegisterCandidatureRequest:
@@ -457,6 +565,36 @@ components:
               properties:
                 name: { type: string }
                 assigned_at: { type: string, format: date-time }
+
+    ReportAccepted:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            id: { type: string, example: 01J9Z8K3Q7R5X2M4B6T8V0W1C2 }
+            status: { type: string, enum: [pending], example: pending }
+
+    ReportStatus:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            id: { type: string, example: 01J9Z8K3Q7R5X2M4B6T8V0W1C2 }
+            type: { type: string, example: consolidated_listing }
+            status: { type: string, enum: [pending, processing, completed, failed], example: completed }
+            requested_at: { type: string, format: date-time }
+            completed_at: { type: string, format: date-time, nullable: true }
+            download_url:
+              type: string
+              nullable: true
+              description: Present (non-null) only once the report is completed.
+              example: http://localhost:8080/reports/01J9Z8K3Q7R5X2M4B6T8V0W1C2/download
+            failure_reason:
+              type: string
+              nullable: true
+              description: Present (non-null) only when the report has failed.
 
     ErrorMessage:
       type: object

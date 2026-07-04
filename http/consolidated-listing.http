@@ -28,7 +28,7 @@ GET {{baseUrl}}/candidatures/consolidated?per_page=5&page=2
 Accept: application/json
 
 ### Combined: filter + sort + pagination
-GET {{baseUrl}}/candidatures/consolidated?filter[evaluator_name]=A&sort=years_of_experience&direction=desc&per_page=5
+GET {{baseUrl}}/candidatures/consolidated?filter[evaluator_name]=M&sort=years_of_experience&direction=desc&per_page=5
 Accept: application/json
 
 ### Invalid sort column (expect 422)

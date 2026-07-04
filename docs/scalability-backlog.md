@@ -31,12 +31,13 @@ we get there nothing is forgotten. PDF #7 asks for: **cache, queues, idempotency
 
 ## 2. Queues (offload slow work)
 
-### 2.1 Excel report generation + email notification
+### 2.1 Excel report generation + email notification — DONE (baseline, capability #6)
 - **What:** generating the Excel of the consolidated listing (50 rows/sheet) and emailing when done.
-- **Why deferred:** it's capability #6, but it's inherently a background job.
-- **From:** PDF #6.
-- **Approach:** a queued `Job` on Redis (the `worker` container already runs `queue:work`); on
-  completion send mail (Mailpit in dev). Store/serve the generated file.
+- **Status:** implemented in #6 as `POST /candidatures/consolidated/export` → `202` + a `Report`
+  aggregate (pending→processing→completed/failed), a queued `GenerateReportJob` on Redis, a
+  PhpSpreadsheet writer (50/sheet) storing on the `local` disk, an email with a download link
+  (Mailpit), and `GET /reports/{id}` + `GET /reports/{id}/download`.
+- **What remains at scale → see §5 below.**
 
 ### 2.2 Bulk auto-assignment for very large backlogs
 - **What:** `POST /candidatures/auto-assign` currently loads **all** unassigned candidatures and
@@ -102,6 +103,42 @@ we get there nothing is forgotten. PDF #7 asks for: **cache, queues, idempotency
 - `candidatures.email` (unique), `assignments.candidature_id` (unique), `assignments.evaluator_id`
   (index), and `candidatures.years_of_experience` (added in #4 for the default sort). Review with
   `EXPLAIN` under load in #7.
+
+## 5. Excel export at scale (from capability #6)
+
+### 5.1 Streaming spreadsheet writer / constant memory
+- **What:** `PhpSpreadsheetConsolidatedReportWriter` builds the whole workbook in memory before saving.
+- **Why deferred:** fine for the exercise; a very large export (100k+ rows) would exhaust memory.
+- **Approach:** a streaming/box writer (e.g. `openspout/openspout`) that flushes rows to disk as it
+  goes, keeping memory flat; or PhpSpreadsheet's cell-caching to a store.
+
+### 5.2 Unbuffered DB cursor for the row stream
+- **What:** `QueryBuilderConsolidatedListingStreamReader` uses `->cursor()`, which still relies on a
+  buffered PDO query by default (mysqlnd buffers the whole result client-side).
+- **Why deferred:** correct results now; memory grows with the result set.
+- **Approach:** enable `PDO::MYSQL_ATTR_USE_BUFFERED_QUERY = false` for the export connection so rows
+  stream from the server, pairing with §5.1 for true constant-memory export. Also revisit keyset
+  pagination (§4.3) to avoid the aggregate derived table cost on huge sets.
+
+### 5.3 Object storage + signed download URLs
+- **What:** files are stored on the `local` disk and served by a plain (unauthenticated) endpoint.
+- **Why deferred:** no auth in this exercise; a single node is fine locally.
+- **Approach:** store on S3-compatible object storage; hand out time-limited **signed URLs** instead of
+  streaming through the app; add download **authorization** (only the requester / allowed roles).
+
+### 5.4 Idempotency & de-duplication of export requests
+- **What:** every `POST /export` creates a new report + job, even for identical criteria in quick
+  succession.
+- **Why deferred:** simple and correct; wasteful under bursts.
+- **Approach:** an idempotency key (or a hash of the criteria within a TTL) that returns the existing
+  in-flight/recent report instead of regenerating (ties into §3.3).
+
+### 5.5 Notify on failure, not just completion
+- **What:** an email is sent only when a report completes; a failed report is visible only via
+  `GET /reports/{id}`.
+- **Why deferred:** the failure is recorded (status `failed` + reason); proactive alerting is extra.
+- **Approach:** also notify the requester on terminal failure; tune `--tries/--backoff`, add a
+  dead-letter/failed-jobs review, and (with §5.3) capture the actual requester identity to address.
 
 ---
 

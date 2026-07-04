@@ -7,6 +7,7 @@ use App\Assignment\Domain\Exception\NoEvaluatorsAvailable;
 use App\Candidature\Domain\Exception\CandidatureAlreadyExists;
 use App\Candidature\Domain\Exception\CandidatureNotFound;
 use App\Evaluator\Domain\Exception\EvaluatorNotFound;
+use App\Report\Domain\Exception\ReportNotFound;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -37,6 +38,9 @@ return Application::configure(basePath: dirname(__DIR__))
         );
         $exceptions->render(
             fn (EvaluatorNotFound $e) => response()->json(['message' => $e->getMessage()], 404),
+        );
+        $exceptions->render(
+            fn (ReportNotFound $e) => response()->json(['message' => $e->getMessage()], 404),
         );
 
         // Assigning an ineligible candidature is a business conflict.

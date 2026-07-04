@@ -1,0 +1,76 @@
+# Manual HTTP calls for the Excel export — these hit the RUNNING app (dev database).
+# Pick the "dev" environment. The flow is asynchronous:
+#   1) POST /export -> 202 + report id (captured below)
+#   2) GET /reports/{id} -> status; with the worker running it is already "completed"
+#   3) GET /reports/{id}/download -> saves the .xlsx to disk
+# The email (with the download link) lands in Mailpit: http://localhost:8025
+# Seed some assigned candidatures first (see http/consolidated-listing.http) so the report has rows.
+
+### 1) Request an export (default: years_of_experience desc) -> 202, capture the id
+POST {{baseUrl}}/candidatures/consolidated/export
+Content-Type: application/json
+Accept: application/json
+
+{}
+
+> {% client.global.set("report_id", response.body.data.id); %}
+
+### 2) Poll status -> with the worker running, this is already "completed" (has download_url)
+GET {{baseUrl}}/reports/{{report_id}}
+Accept: application/json
+
+### 3) Download the .xlsx -> PhpStorm saves it under http/generated/ and opens it
+GET {{baseUrl}}/reports/{{report_id}}/download
+Accept: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+
+>>! generated/report.xlsx
+
+### Export filtered by evaluator name prefix (only that evaluator's candidates)
+POST {{baseUrl}}/candidatures/consolidated/export
+Content-Type: application/json
+Accept: application/json
+
+{ "sort": "evaluator_name", "direction": "asc", "filter": { "evaluator_name": "M" } }
+
+> {% client.global.set("filtered_report_id", response.body.data.id); %}
+
+### Status of the filtered export
+GET {{baseUrl}}/reports/{{filtered_report_id}}
+Accept: application/json
+
+### Invalid sort column (expect 422)
+POST {{baseUrl}}/candidatures/consolidated/export
+Content-Type: application/json
+Accept: application/json
+
+{ "sort": "drop_table" }
+
+### Status of a well-formed but non-existent report id (expect 404)
+GET {{baseUrl}}/reports/01ARZ3NDEKTSV4RRFFQ69G5FAV
+Accept: application/json
+
+### Download a non-existent report (expect 404)
+GET {{baseUrl}}/reports/01ARZ3NDEKTSV4RRFFQ69G5FAV/download
+Accept: application/json
+
+
+# =====================================================================
+# See the lifecycle states in slow motion (pending -> completed):
+#   docker compose stop worker      # nobody drains the queue
+#   run the POST below -> GET status stays "pending"/"processing"
+#   docker compose start worker     # the worker picks it up
+#   GET status again -> "completed"
+# =====================================================================
+
+### Export while the worker is stopped -> stays pending until you start the worker
+POST {{baseUrl}}/candidatures/consolidated/export
+Content-Type: application/json
+Accept: application/json
+
+{}
+
+> {% client.global.set("slow_report_id", response.body.data.id); %}
+
+### Status (pending/processing while worker is down; completed once it is back up)
+GET {{baseUrl}}/reports/{{slow_report_id}}
+Accept: application/json

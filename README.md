@@ -274,6 +274,41 @@ curl http://localhost:8080/candidatures/{id}/summary -H "Accept: application/jso
 | `200 OK` | The summary (data + validations + evaluator). |
 | `404 Not Found` | No candidature with that id. |
 
+### `POST /candidatures/consolidated/export`
+
+Requests an **Excel export** of the consolidated listing (same `sort`/`filter` as the listing, no
+pagination). It does not build the file inline: it records a `Report` (status `pending`), schedules a
+background job (Redis queue + `worker`) and returns `202` immediately. The job builds the workbook
+(**PhpSpreadsheet**, 50 candidates per sheet), stores it, marks the report `completed` and emails a
+download link (Mailpit at `http://localhost:8025`). See `http/reports.http` for the full flow.
+
+```bash
+curl -X POST "http://localhost:8080/candidatures/consolidated/export" \
+  -H "Content-Type: application/json" -H "Accept: application/json" -d '{"sort":"years_of_experience","direction":"desc"}'
+# 202 { "data": { "id": "01J...", "status": "pending" } }
+```
+
+| Status | When |
+|---|---|
+| `202 Accepted` | The export was accepted; generation scheduled. |
+| `422 Unprocessable Entity` | Invalid `sort` / `direction` / filter. |
+
+### `GET /reports/{id}` and `GET /reports/{id}/download`
+
+Poll the report status and download the file once ready. The report moves
+`pending → processing → completed` (or `failed`, with a reason).
+
+```bash
+curl http://localhost:8080/reports/{id} -H "Accept: application/json"
+# { "data": { "status": "completed", "download_url": "http://localhost:8080/reports/{id}/download", ... } }
+curl -L http://localhost:8080/reports/{id}/download -o report.xlsx
+```
+
+| Endpoint | Status | When |
+|---|---|---|
+| `GET /reports/{id}` | `200` / `404` | Status returned / no such report. |
+| `GET /reports/{id}/download` | `200` / `409` / `404` | The `.xlsx` / not completed yet / no such report. |
+
 ## Testing
 
 Philosophy: **no internal mocks** — only external boundaries would be mocked (there are none yet).
@@ -293,7 +328,7 @@ The infrastructure for horizontal scaling is in place and used as capabilities l
 
 - **Redis** — cache and queue backend.
 - **Queue worker** — a dedicated container (`queue:work redis --tries=3 --backoff=5`) for async work
-  (the upcoming Excel report + email notification).
+  (used by the Excel report generation + email notification).
 - **Idempotency & concurrency** — email uniqueness is already race-safe via the DB unique constraint;
   bulk-assignment concurrency and idempotency are addressed in later capabilities.
 - **Mailpit** — captures outgoing mail in development.
@@ -310,5 +345,5 @@ This repo is built capability by capability (Spec-Driven Development; see `opens
 | + | `auto-assignment` (least-loaded bulk, beyond the brief) | ✅ Implemented |
 | 4 | `consolidated-listing` (complex SQL) | ✅ Implemented |
 | 5 | `candidature-summary` (Collections) | ✅ Implemented |
-| 6 | `excel-report` (queue + email) | ⬜ Planned |
+| 6 | `excel-report` (queue + email + PhpSpreadsheet) | ✅ Implemented |
 | 7 | `scalability` hardening | ⬜ Planned |
