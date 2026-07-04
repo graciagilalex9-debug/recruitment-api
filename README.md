@@ -32,17 +32,21 @@ only — the domain knows nothing about the framework.
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │  Infrastructure  (Laravel = detail)                           │
-│  ├─ Http/         Controllers, FormRequests, Resources        │
-│  ├─ Persistence/  Eloquent repositories + models + mappers    │
-│  ├─ Providers/    interface → implementation binding          │
-│  └─ (Queue/, Console/ …)                                      │
+│  ├─ Http/         Controllers, FormRequests, Resources, Mware │
+│  ├─ Persistence/  Eloquent repos + models + mappers; QB readers│
+│  ├─ Cache/        caching decorators + version-key helper      │
+│  ├─ Queue/        queued Jobs (async Excel report)            │
+│  ├─ Mail/         Mailables + notifier                        │
+│  ├─ Lock/         Redis mutex (distributed lock)             │
+│  └─ Providers/    interface → implementation binding          │
 ├──────────────────────────────────────────────────────────────┤
 │  Application  (use cases)                                      │
-│  └─ one class per use case; orchestrates the domain           │
+│  └─ one class per use case; ports (Reader, Dispatcher,        │
+│     Writer, Notifier, Mutex …) it depends on                  │
 ├──────────────────────────────────────────────────────────────┤
 │  Domain  (pure PHP, ZERO Laravel)                             │
-│  ├─ Aggregates, Value Objects                                 │
-│  ├─ Chain-of-Responsibility validation (planned)             │
+│  ├─ Aggregates, Value Objects (+ enums: Report state)        │
+│  ├─ Extensible rule-pipeline validation                      │
 │  └─ Repository/Reader interfaces (ports), exceptions          │
 └──────────────────────────────────────────────────────────────┘
         Domain  ←  Application  ←  Infrastructure
@@ -56,30 +60,35 @@ without rewriting business logic. Purity is enforced by *imports* (the domain im
 ### Lightweight CQRS
 
 - **Writes** go through repositories implemented with **Eloquent** (behind a domain interface).
-- **Reads / complex queries** (e.g. the upcoming consolidated listing) use the **Query Builder**
-  directly, returning DTOs, without going through the domain.
+- **Reads / complex queries** (e.g. the consolidated listing) use the **Query Builder** directly,
+  returning DTOs, without going through the domain.
 
 ## Project structure
 
+The code is organised by **bounded context**, each a full vertical slice with the same three layers:
+
 ```
-app/Candidature/
-├─ Domain/                          pure PHP, no framework
-│  ├─ Candidature.php                   aggregate root
-│  ├─ CandidatureRepository.php         port (interface)
-│  ├─ ValueObject/                      CandidatureId, Email, YearsOfExperience, FullName, Cv
-│  └─ Exception/                        domain exceptions
-├─ Application/
-│  └─ Register/                         Command, Registrar (use case), Response DTO
-└─ Infrastructure/
-   ├─ Http/                             PostCandidatureController, RegisterCandidatureRequest, Resource
-   ├─ Persistence/                      CandidatureModel, CandidatureMapper, EloquentCandidatureRepository
-   └─ Providers/                        CandidatureServiceProvider (DI binding)
+app/
+├─ Candidature/    registration · extensible rule-pipeline validation · summary (Collections)
+├─ Evaluator/      evaluators
+├─ Assignment/     assign · auto-assign (least-loaded) · consolidated listing (Query Builder reads)
+│                  · listing cache (decorators + version-key) · Mutex (bulk lock)
+├─ Report/         async Excel export — aggregate with a STATE lifecycle · queued Job · Mailable
+└─ Shared/         cross-cutting infrastructure (idempotency middleware)
+
+# every context is split the same way:
+<Context>/
+├─ Domain/           pure PHP, no framework — aggregates, Value Objects, ports (interfaces), exceptions
+├─ Application/       use cases (one class each) + the ports they depend on + DTOs
+└─ Infrastructure/   Http · Persistence · Cache · Queue · Mail · Lock · Providers (adapters + DI)
 
 docker/            Dockerfile (php-fpm 8.4) + nginx config
-docs/openapi.yaml  HTTP contract (source of truth, spec-first)
+config/performance.php   cache/idempotency/lock TTLs (tunable, env-overridable)
+docs/openapi.yaml  HTTP contract (source of truth, spec-first) — Swagger UI at /docs
+docs/performance-notes.md · docs/scalability-backlog.md   measurements + scalability decisions
 http/              PhpStorm HTTP Client requests (manual, hit the dev DB)
-openspec/          Spec-Driven Development artifacts (project.md, changes/)
-tests/             Unit (pure) + Feature (integration, real MySQL)
+openspec/          Spec-Driven Development artifacts (specs/ + archived changes)
+tests/             Unit (pure) + Feature (integration, real MySQL) + Support (fakes, object mothers)
 ```
 
 ## Key design decisions
@@ -95,15 +104,44 @@ tests/             Unit (pure) + Feature (integration, real MySQL)
 | **Two kinds of validation** | Input *shape* at the HTTP boundary (FormRequest → `422`); business *rules* in the domain. |
 | **OpenAPI is spec-first** | `docs/openapi.yaml` is the source of truth; the code satisfies it (not generated from annotations, which would couple the contract to the framework). |
 | **Dedicated `mysql-test` (tmpfs) for tests** | Integration tests run on the real MySQL engine, isolated from dev, fast and ephemeral. Never the dev DB. |
+| **Rule pipeline over classic Chain of Responsibility** | Same extensibility, but it collects *all* validation reasons (no short-circuit) and stays stateless → cacheable and unit-testable. See "Patterns used". |
+| **Candidature is immutable; states/bitácora deferred** | Simpler and lets the validation report be cached forever; a history/state lifecycle is a future dedicated capability, not bolted on. |
+| **No single transaction around the bulk auto-assign** | The operation only processes *unassigned* candidatures, so it is idempotent and **resumable** (re-running finishes the rest); each `save()` is an atomic upsert and the run is serialized by a lock. One giant transaction would hold locks and bloat at scale — batched commits would be the scale answer, not a mega-transaction. |
 
 ## Patterns used
 
-- **Hexagonal (ports & adapters)** — `CandidatureRepository` is a port; `EloquentCandidatureRepository`
-  is the adapter, wired in a service provider.
-- **DDD tactical patterns** — aggregate root, value objects, domain exceptions, repository.
-- **CQRS (lightweight)** — Eloquent for writes, Query Builder for complex reads.
-- **Data Mapper** — `CandidatureMapper` isolates persistence from the domain.
-- **Chain of Responsibility** — planned for extensible candidature validation.
+- **Hexagonal (ports & adapters)** — domain/application declare ports (`CandidatureRepository`,
+  `ConsolidatedListingReader`, `ReportDispatcher`, `ConsolidatedReportWriter`, `ReportNotifier`,
+  `Mutex` …); infrastructure provides the adapters, wired in service providers.
+- **DDD tactical patterns** — aggregate roots, value objects (incl. PHP **enums** for the `Report`
+  state), domain exceptions, repositories.
+- **CQRS (lightweight)** — Eloquent for writes; Query Builder for complex reads returning DTOs.
+- **Data Mapper** — mappers isolate the Eloquent models from the domain aggregates.
+- **Rule pipeline** (extensible validation) — a collection of independent, stateless rules run over a
+  candidature and aggregated into a report; adding a rule is one line in the provider, existing rules
+  untouched. *(A stateless relative of Chain of Responsibility — see below.)*
+- **Decorator** — caching decorators over the read ports and the assignment repository (transparent
+  caching + version-key invalidation), without touching the real implementations.
+- **Middleware** — a reusable idempotency middleware (`Idempotency-Key`) for safe retries.
+- **Mutex / distributed lock** — serializes the bulk auto-assign (Redis lock behind a `Mutex` port).
+- **Queued Job** — asynchronous Excel generation + email notification.
+- **State machine** — the `Report` aggregate's guarded lifecycle (`pending → processing →
+  completed | failed`), illegal transitions rejected in the domain.
+
+### Validation: rule pipeline vs. classic Chain of Responsibility
+
+The brief suggests Chain of Responsibility. We implemented a **rule pipeline** instead. It meets the
+same requirement — *extensible without modifying existing rules* (add a rule in the service provider) —
+but is a better fit here because:
+
+- **It collects every result, it doesn't short-circuit.** The endpoint must report *all* the reasons a
+  candidature is (in)valid. A classic CoR stops at the first handler that handles the request; our
+  pipeline runs **all** rules and aggregates pass/fail. "Report all reasons" beats "stop at the first".
+- **Rules are stateless** (each is a pure function of the candidature), so the report is **cacheable**
+  and each rule is trivially unit-tested in isolation.
+
+The extensibility that CoR is cited for is fully preserved; we just kept the rules independent instead
+of chained.
 
 ## Getting started
 
@@ -311,15 +349,23 @@ curl -L http://localhost:8080/reports/{id}/download -o report.xlsx
 
 ## Testing
 
-Philosophy: **no internal mocks** — only external boundaries would be mocked (there are none yet).
+**82 tests / 200+ assertions.** Philosophy: **no internal mocks** — our own classes are exercised for
+real; only **external boundaries** are faked, and always with Laravel's own fakes.
 
-- **Unit tests** (`tests/Unit`) — pure PHP, no framework, no DB. Value objects and the use case
-  (against an in-memory *fake* repository — a real implementation, not a mock).
+- **Unit tests** (`tests/Unit`) — pure PHP, no framework, no DB. Value objects, the validation rule
+  pipeline, and use cases against **in-memory fakes** (`InMemory*Repository`, `FakePendingAssignmentReader`,
+  `ImmediateMutex`) and an **object mother** (`CandidatureMother`) — real implementations, not mocks.
 - **Integration tests** (`tests/Feature`) — the full app against the real **`mysql-test`** database
-  (`RefreshDatabase`: migrate once, each test in a rolled-back transaction). Never the dev DB.
+  (`RefreshDatabase`), so the complex SQL (`GROUP_CONCAT`, joins) runs on the real engine. Never the
+  dev DB. External boundaries are faked: **`Mail::fake`** (SMTP), **`Storage::fake`** (filesystem),
+  **`Bus::fake`** (queue) where a test needs to observe dispatch; the queue otherwise runs on the
+  `sync` driver so real jobs/use cases execute end to end.
+- **Caching caveat learned the hard way:** the caching tests also assert against real Redis, because
+  the `array` cache store doesn't serialize and once masked a cache-hit bug — see
+  `docs/performance-notes.md`.
 
 ```bash
-make test
+make test        # or: make quality  (pint + phpstan L8 + tests)
 ```
 
 ## Scalability
