@@ -106,7 +106,7 @@ tests/             Unit (pure) + Feature (integration, real MySQL) + Support (fa
 | **Dedicated `mysql-test` (tmpfs) for tests** | Integration tests run on the real MySQL engine, isolated from dev, fast and ephemeral. Never the dev DB. |
 | **Rule pipeline over classic Chain of Responsibility** | Same extensibility, but it collects *all* validation reasons (no short-circuit) and stays stateless → cacheable and unit-testable. See "Patterns used". |
 | **Candidature is immutable; states/bitácora deferred** | Simpler and lets the validation report be cached forever; a history/state lifecycle is a future dedicated capability, not bolted on. |
-| **No single transaction around the bulk auto-assign** | The operation only processes *unassigned* candidatures, so it is idempotent and **resumable** (re-running finishes the rest); each `save()` is an atomic upsert and the run is serialized by a lock. One giant transaction would hold locks and bloat at scale — batched commits would be the scale answer, not a mega-transaction. |
+| **The bulk auto-assign runs in a DB transaction (atomic)** | A mid-batch failure rolls back the whole run — no partial assignments (via a `TransactionManager` port; proven by a rollback test). Single writes (register, single assign) are already atomic, so they don't need wrapping. The lock handles concurrency *between* runs; the transaction handles atomicity *within* a run. At very large scale, batched commits would replace one big transaction — noted in the backlog. |
 
 ## Patterns used
 
@@ -124,6 +124,8 @@ tests/             Unit (pure) + Feature (integration, real MySQL) + Support (fa
   caching + version-key invalidation), without touching the real implementations.
 - **Middleware** — a reusable idempotency middleware (`Idempotency-Key`) for safe retries.
 - **Mutex / distributed lock** — serializes the bulk auto-assign (Redis lock behind a `Mutex` port).
+- **Transaction boundary (unit of work)** — the bulk auto-assign runs atomically behind a
+  `TransactionManager` port (`DB::transaction`); a mid-batch failure rolls back the whole run.
 - **Queued Job** — asynchronous Excel generation + email notification.
 - **State machine** — the `Report` aggregate's guarded lifecycle (`pending → processing →
   completed | failed`), illegal transitions rejected in the domain.

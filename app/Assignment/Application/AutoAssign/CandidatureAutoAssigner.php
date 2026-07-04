@@ -6,6 +6,7 @@ namespace App\Assignment\Application\AutoAssign;
 
 use App\Assignment\Application\Lock\LockNotAcquired;
 use App\Assignment\Application\Lock\Mutex;
+use App\Assignment\Application\Transaction\TransactionManager;
 use App\Assignment\Domain\Assignment;
 use App\Assignment\Domain\AssignmentRepository;
 use App\Assignment\Domain\Exception\AutoAssignInProgress;
@@ -32,17 +33,27 @@ final readonly class CandidatureAutoAssigner
         private AssignmentRepository $assignments,
         private CandidatureValidator $validator,
         private Mutex $mutex,
+        private TransactionManager $transactions,
     ) {}
 
     /**
-     * Serialize the whole bulk operation: reading the backlog and distributing it is not
-     * atomic, so two concurrent runs would work from the same snapshot and collide. Only one
-     * runs at a time; a concurrent request fails fast with AutoAssignInProgress (409).
+     * Serialize the whole bulk operation and make it atomic:
+     * - the Mutex ensures only one run executes at a time (concurrency between runs); a
+     *   concurrent request fails fast with AutoAssignInProgress (409);
+     * - the transaction ensures a single run is all-or-nothing (atomicity within a run): if
+     *   any assignment fails mid-way, every write in that run is rolled back — no partial batch.
+     *
+     * Lock on the outside, transaction on the inside.
      */
     public function assignAll(): AutoAssignmentResponse
     {
         try {
-            return $this->mutex->withLock(self::LOCK, fn (): AutoAssignmentResponse => $this->run());
+            return $this->mutex->withLock(
+                self::LOCK,
+                fn (): AutoAssignmentResponse => $this->transactions->transactional(
+                    fn (): AutoAssignmentResponse => $this->run(),
+                ),
+            );
         } catch (LockNotAcquired) {
             throw new AutoAssignInProgress;
         }

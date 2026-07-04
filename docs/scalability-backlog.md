@@ -37,12 +37,13 @@ we get there nothing is forgotten. PDF #7 asks for: **cache, queues, idempotency
 
 ### 2.2 Bulk auto-assignment for very large backlogs
 - **What:** `POST /candidatures/auto-assign` currently loads **all** unassigned candidatures and
-  assigns them **synchronously** in one request.
+  assigns them **synchronously** in one request, wrapped in a single DB transaction (atomic).
 - **Why deferred:** correct and fine for normal sizes; a huge backlog would be slow / memory-heavy in
-  a single request.
+  a single request, and a single transaction over thousands of writes would hold locks too long.
 - **From:** auto-assignment capability.
 - **Approach:** chunk the backlog and dispatch a queued job (or several); return `202 Accepted` with a
-  job/status reference instead of a synchronous summary.
+  job/status reference; commit **per chunk** (batched transactions) instead of one big transaction, so
+  atomicity is per-chunk and locks stay short.
 
 ## 3. Concurrency & idempotency
 
