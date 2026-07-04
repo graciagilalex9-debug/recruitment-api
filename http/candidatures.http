@@ -128,3 +128,33 @@ Accept: application/json
 ### Validate a malformed id (expect 404 — route miss via whereUlid)
 GET {{baseUrl}}/candidatures/not-a-ulid/validation
 Accept: application/json
+
+
+# =====================================================================
+# Candidature summary — GET /candidatures/{id}/summary
+# Full data + validations (passed/failed) + evaluator (or null).
+# =====================================================================
+
+### Register a candidate for the summary demo -> capture its id
+POST {{baseUrl}}/candidatures
+Content-Type: application/json
+Accept: application/json
+
+{
+  "full_name": "Katherine Johnson",
+  "email": "summary-{{$timestamp}}@example.com",
+  "years_of_experience": 8,
+  "cv": "NASA mathematician."
+}
+
+> {%
+    client.global.set("summary_id", response.body.data.id);
+%}
+
+### Summary of that candidate (expect 200: data + validations + evaluator:null until assigned)
+GET {{baseUrl}}/candidatures/{{summary_id}}/summary
+Accept: application/json
+
+### Summary of a non-existent candidature (expect 404)
+GET {{baseUrl}}/candidatures/01ARZ3NDEKTSV4RRFFQ69G5FAV/summary
+Accept: application/json
