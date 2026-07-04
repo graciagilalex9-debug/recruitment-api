@@ -340,7 +340,10 @@ The infrastructure for horizontal scaling is in place and used as capabilities l
   export; `POST /candidatures` is already idempotent via its unique email.
 - **Concurrency** — single assignments are race-safe via the `assignments.candidature_id` unique
   index; the **bulk auto-assign** runs under an exclusive Redis lock (a `Mutex` port), so only one runs
-  at a time and a concurrent request gets `409`. Keyset pagination is the remaining #7 slice.
+  at a time and a concurrent request gets `409`.
+- **Deep pagination** — the OFFSET cost on deep pages is measured (~118 ms at `OFFSET 7000`) and the
+  keyset/cursor fix is **designed and consciously deferred** (realistic sizes don't need it yet) —
+  see `docs/performance-notes.md`.
 - **Mailpit** — captures outgoing mail in development.
 
 ## Roadmap
@@ -356,4 +359,4 @@ This repo is built capability by capability (Spec-Driven Development; see `opens
 | 4 | `consolidated-listing` (complex SQL) | ✅ Implemented |
 | 5 | `candidature-summary` (Collections) | ✅ Implemented |
 | 6 | `excel-report` (queue + email + PhpSpreadsheet) | ✅ Implemented |
-| 7 | `scalability` hardening (caching ✓ · idempotency ✓ · locks ✓ · keyset) | 🚧 In progress |
+| 7 | `scalability` hardening (caching ✓ · idempotency ✓ · locks ✓ · keyset △ designed/deferred) | ✅ Implemented |

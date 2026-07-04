@@ -85,7 +85,46 @@ _Design + measurements TBD._
 
 _Design + measurements TBD._
 
-## Slice 4 — Keyset pagination (consolidated listing)
+## Slice 4 — Keyset pagination (consolidated listing) — DESIGNED, CONSCIOUSLY DEFERRED
 
-_Baseline already captured above: deep `OFFSET 7000` ≈ 118 ms. Keyset target: constant time at any
-depth. Design + after-measurements TBD._
+### The problem, measured
+`LIMIT n OFFSET y` scans and discards `y` rows before returning `n`. Measured on the 10k/8k volume:
+
+| Page | Time |
+|---|---|
+| page 1 (`OFFSET 0`) | ~39 ms |
+| deep page (`OFFSET 7000`) | **~118 ms** |
+
+Cost grows linearly with page depth — offset pagination degrades on deep pages.
+
+### The fix (design, ready to build)
+Keyset / cursor ("seek") pagination: instead of "skip `y` rows", ask for the rows **after the last one
+seen**, using the sort key plus a unique tiebreaker so the DB seeks via the index in constant time:
+
+```sql
+-- default order, keyset form:
+WHERE (years_of_experience, id) < (:last_years, :last_id)
+ORDER BY years_of_experience DESC, id DESC
+LIMIT :n
+```
+
+- **Opt-in, alongside offset:** add a `?cursor=` mode for the **default order** (years desc + a unique
+  id tiebreaker), leaving `?page=` for random access. Laravel's `cursorPaginate()` builds the seek
+  `WHERE` and the opaque cursor tokens; the response would carry `next_cursor` / `prev_cursor`.
+- Works with the existing version-key cache (the cursor is part of the cache key).
+
+### Trade-offs
+| | OFFSET (current) | Keyset |
+|---|---|---|
+| Deep pages | slow (scan + discard) | constant time |
+| Jump to page N | yes | no (next/prev only) |
+| `total` / `last_page` | yes | usually not |
+| Stable under inserts | can drift/duplicate | stable |
+
+### Decision (why deferred, not skipped)
+Deferred **on purpose, with data**: for this domain (candidatures ↔ evaluators) realistic datasets are
+small and nobody pages thousands deep, so offset is fine and keyset would be premature optimisation
+(it also loses "jump to page N" / `total`). The bottleneck is measured, the fix is designed above, and
+it's a bounded change (opt-in cursor mode on the default order) to pick up **when deep-page latency is
+actually observed**. Arbitrary-column keyset (esp. sorting by the `evaluator_total` aggregate) is a
+larger design and would come later.

@@ -83,10 +83,16 @@ we get there nothing is forgotten. PDF #7 asks for: **cache, queues, idempotency
 - **Approach:** sort by indexed candidature columns where possible; precompute the aggregate into a
   column/summary table to make it sortable via index.
 
-### 4.3 Deep pagination with `OFFSET`
-- **What:** `LIMIT x OFFSET y` scans and discards `y` rows → slow on deep pages.
-- **Approach:** **keyset / cursor pagination** (`WHERE (sort_col, id) < (last_seen…)`), which stays
-  fast at any depth.
+### 4.3 Deep pagination with `OFFSET` — DESIGNED, CONSCIOUSLY DEFERRED (#7 slice 4)
+- **What:** `LIMIT x OFFSET y` scans and discards `y` rows → slow on deep pages (**measured ~118 ms at
+  `OFFSET 7000`** vs ~39 ms on page 1).
+- **Fix (designed):** an opt-in `?cursor=` keyset mode for the default order (years desc + a unique id
+  tiebreaker) via `cursorPaginate()`, alongside the existing `?page=` offset; returns
+  `next_cursor`/`prev_cursor`. See `docs/performance-notes.md` § Slice 4.
+- **Decision:** deferred on purpose — realistic dataset sizes for this domain don't page thousands
+  deep, so offset is adequate and keyset (which loses "jump to page N" / `total`) would be premature.
+  Revisit when deep-page latency is actually observed. Arbitrary-column / aggregate-sort keyset is a
+  larger follow-up.
 
 ### 4.4 Filtering — index-friendly by design (baseline)
 - **Status:** ✅ we chose **exact + prefix (`value%`)** filters that use indexes, and avoided
