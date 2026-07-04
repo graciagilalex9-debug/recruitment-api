@@ -117,6 +117,11 @@ tests/             Unit (pure) + Feature (integration, real MySQL) + Support (fa
   state), domain exceptions, repositories.
 - **CQRS (lightweight)** — Eloquent for writes; Query Builder for complex reads returning DTOs.
 - **Data Mapper** — mappers isolate the Eloquent models from the domain aggregates.
+- **Collections** — used to shape output in the **Infrastructure/HTTP presenters** (e.g. the summary
+  splits rule results into passed/failed, the validation resource maps them). `collect()` is a Laravel
+  utility, so by our decoupling rule it lives **only in Infrastructure**; Domain and Application shape
+  data with native array functions (`array_map`/`array_filter`/`array_all`) to stay framework-free —
+  using `collect()` there would couple them to Laravel, which is exactly what this project avoids.
 - **Rule pipeline** (extensible validation) — a collection of independent, stateless rules run over a
   candidature and aggregated into a report; adding a rule is one line in the provider, existing rules
   untouched. *(A stateless relative of Chain of Responsibility — see below.)*

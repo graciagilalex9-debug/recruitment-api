@@ -26,14 +26,13 @@ final class ValidationReportResource extends JsonResource
         return [
             'candidature_id' => $report->candidatureId,
             'valid' => $report->valid,
-            'rules' => array_map(
-                static fn (RuleResultResponse $rule): array => [
+            'rules' => collect($report->rules)
+                ->map(static fn (RuleResultResponse $rule): array => [
                     'rule' => $rule->key,
                     'passed' => $rule->passed,
                     'reason' => $rule->reason,
-                ],
-                $report->rules,
-            ),
+                ])
+                ->all(),
         ];
     }
 }
