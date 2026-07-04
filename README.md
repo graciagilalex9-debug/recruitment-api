@@ -258,6 +258,22 @@ curl "http://localhost:8080/candidatures/consolidated?sort=evaluator_name&direct
   (`GROUP_CONCAT`/`COUNT`) is the one heavy part at very large scale — see `docs/scalability-backlog.md`.
 - **`422`** on an unknown sort column or invalid params.
 
+### `GET /candidatures/{id}/summary`
+
+One consolidated view of a single candidature: its full data, the `valid` flag, the validation
+breakdown (`validations.passed` / `validations.failed`, computed by reusing the rules) and its
+`evaluator` (`{ name, assigned_at }`, or `null` if unassigned). The passed/failed split is built with
+**Collections** in the HTTP layer.
+
+```bash
+curl http://localhost:8080/candidatures/{id}/summary -H "Accept: application/json"
+```
+
+| Status | When |
+|---|---|
+| `200 OK` | The summary (data + validations + evaluator). |
+| `404 Not Found` | No candidature with that id. |
+
 ## Testing
 
 Philosophy: **no internal mocks** — only external boundaries would be mocked (there are none yet).
@@ -293,6 +309,6 @@ This repo is built capability by capability (Spec-Driven Development; see `opens
 | 3 | `evaluator-management` + `evaluator-assignment` | ✅ Implemented |
 | + | `auto-assignment` (least-loaded bulk, beyond the brief) | ✅ Implemented |
 | 4 | `consolidated-listing` (complex SQL) | ✅ Implemented |
-| 5 | `candidature-summary` (Collections) | ⬜ Planned |
+| 5 | `candidature-summary` (Collections) | ✅ Implemented |
 | 6 | `excel-report` (queue + email) | ⬜ Planned |
 | 7 | `scalability` hardening | ⬜ Planned |
