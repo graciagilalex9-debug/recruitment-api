@@ -15,10 +15,11 @@ help: ## Show this help
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
 
 ## --- Setup ---
-setup: ## First-time setup from a fresh clone (env, build, start, app key, migrate + seed)
-	cp -n .env.example .env || true
+setup: ## First-time setup from a fresh clone (env, build, start, deps, app key, migrate + seed)
+	test -f .env || cp .env.example .env
 	$(DC) build
 	$(DC) up -d
+	$(EXEC) composer install
 	$(EXEC) php artisan key:generate
 	$(EXEC) php artisan migrate --seed
 	@echo "\nReady -> API http://localhost:8080  ·  Swagger http://localhost:8080/docs  ·  Mailpit http://localhost:8025"

@@ -162,6 +162,7 @@ hand. Equivalent manual steps:
 cp .env.example .env
 make build                       # build the php-fpm 8.4 image
 make up                          # start nginx, app, worker, mysql, redis, mailpit, mysql-test
+docker compose exec app composer install    # vendor/ is git-ignored — install deps first
 docker compose exec app php artisan key:generate
 make fresh                       # drop + migrate + seed (25 candidatures, 5 evaluators, 15 assignments)
 ```
