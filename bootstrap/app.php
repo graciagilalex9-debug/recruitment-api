@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Assignment\Domain\Exception\CandidatureNotEligible;
+use App\Assignment\Domain\Exception\NoEvaluatorsAvailable;
 use App\Candidature\Domain\Exception\CandidatureAlreadyExists;
 use App\Candidature\Domain\Exception\CandidatureNotFound;
 use App\Evaluator\Domain\Exception\EvaluatorNotFound;
@@ -41,5 +42,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // Assigning an ineligible candidature is a business conflict.
         $exceptions->render(
             fn (CandidatureNotEligible $e) => response()->json(['message' => $e->getMessage()], 409),
+        );
+
+        // Bulk auto-assign with no evaluators to distribute to is a business conflict.
+        $exceptions->render(
+            fn (NoEvaluatorsAvailable $e) => response()->json(['message' => $e->getMessage()], 409),
         );
     })->create();

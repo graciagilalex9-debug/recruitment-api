@@ -1,0 +1,81 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Assignment\Application\AutoAssign;
+
+use App\Assignment\Domain\Assignment;
+use App\Assignment\Domain\AssignmentRepository;
+use App\Assignment\Domain\Exception\NoEvaluatorsAvailable;
+use App\Assignment\Domain\PendingAssignmentReader;
+use App\Candidature\Domain\Candidature;
+use App\Candidature\Domain\Validation\CandidatureValidator;
+use App\Evaluator\Domain\ValueObject\EvaluatorId;
+use DateTimeImmutable;
+
+/**
+ * Use case: assign every unassigned, eligible candidature to the least-loaded evaluator.
+ *
+ * Eligibility is the domain rules (reused validator), not a SQL filter. Balancing keeps a
+ * live tally of per-evaluator load, picking the minimum each time so the distribution stays
+ * even in a single pass.
+ */
+final readonly class CandidatureAutoAssigner
+{
+    public function __construct(
+        private PendingAssignmentReader $reader,
+        private AssignmentRepository $assignments,
+        private CandidatureValidator $validator,
+    ) {}
+
+    public function assignAll(): AutoAssignmentResponse
+    {
+        $loads = $this->reader->evaluatorLoads();
+        $candidatures = $this->reader->unassignedCandidatures();
+
+        $eligible = array_values(array_filter(
+            $candidatures,
+            fn (Candidature $candidature): bool => $this->validator->validate($candidature)->isValid(),
+        ));
+
+        $skippedIneligible = count($candidatures) - count($eligible);
+
+        if ($eligible !== [] && $loads === []) {
+            throw new NoEvaluatorsAvailable;
+        }
+
+        $assigned = 0;
+        foreach ($eligible as $candidature) {
+            $evaluatorId = $this->leastLoaded($loads);
+
+            $this->assignments->save(Assignment::assign(
+                $candidature->id(),
+                new EvaluatorId($evaluatorId),
+                new DateTimeImmutable,
+            ));
+
+            $loads[$evaluatorId]++;
+            $assigned++;
+        }
+
+        return new AutoAssignmentResponse($assigned, $skippedIneligible);
+    }
+
+    /**
+     * @param  array<string, int>  $loads  a non-empty map of evaluatorId => current load
+     */
+    private function leastLoaded(array $loads): string
+    {
+        $chosen = '';
+        $min = null;
+
+        foreach ($loads as $evaluatorId => $load) {
+            if ($min === null || $load < $min) {
+                $min = $load;
+                $chosen = $evaluatorId;
+            }
+        }
+
+        return $chosen;
+    }
+}

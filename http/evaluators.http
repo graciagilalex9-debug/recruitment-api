@@ -1,0 +1,138 @@
+# Manual HTTP calls for evaluators + assignment — these hit the RUNNING app (dev database).
+# Pick the "dev" environment (top-right) and run each request with the green ▶.
+# Requests chain: they capture ids from responses so later calls reuse them.
+# {{$timestamp}} keeps candidate emails unique so the POSTs don't 409 on re-runs.
+
+### Create an evaluator (expect 201) -> capture its id
+POST {{baseUrl}}/evaluators
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Grace Hopper"
+}
+
+> {%
+    client.global.set("evaluator_id", response.body.data.id);
+%}
+
+### Create a second evaluator (for the reassignment demo) -> capture its id
+POST {{baseUrl}}/evaluators
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Alan Turing"
+}
+
+> {%
+    client.global.set("evaluator_id_2", response.body.data.id);
+%}
+
+### Create an evaluator without a name (expect 422)
+POST {{baseUrl}}/evaluators
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": ""
+}
+
+### Register an ELIGIBLE candidate (>= 2 years) -> capture its id
+POST {{baseUrl}}/candidatures
+Content-Type: application/json
+Accept: application/json
+
+{
+  "full_name": "Katherine Johnson",
+  "email": "katherine-{{$timestamp}}@example.com",
+  "years_of_experience": 8,
+  "cv": "NASA mathematician."
+}
+
+> {%
+    client.global.set("candidature_id", response.body.data.id);
+%}
+
+### Register an INELIGIBLE candidate (1 year) -> capture its id
+POST {{baseUrl}}/candidatures
+Content-Type: application/json
+Accept: application/json
+
+{
+  "full_name": "Junior Dev",
+  "email": "junior-{{$timestamp}}@example.com",
+  "years_of_experience": 1,
+  "cv": "Eager to learn."
+}
+
+> {%
+    client.global.set("ineligible_candidature_id", response.body.data.id);
+%}
+
+### Assign the evaluator to the eligible candidate (expect 200)
+PUT {{baseUrl}}/candidatures/{{candidature_id}}/evaluator
+Content-Type: application/json
+Accept: application/json
+
+{
+  "evaluator_id": "{{evaluator_id}}"
+}
+
+### Reassign the same candidate to the second evaluator (expect 200, replaces)
+PUT {{baseUrl}}/candidatures/{{candidature_id}}/evaluator
+Content-Type: application/json
+Accept: application/json
+
+{
+  "evaluator_id": "{{evaluator_id_2}}"
+}
+
+### Assign to the INELIGIBLE candidate (expect 409 — the eligibility gate)
+PUT {{baseUrl}}/candidatures/{{ineligible_candidature_id}}/evaluator
+Content-Type: application/json
+Accept: application/json
+
+{
+  "evaluator_id": "{{evaluator_id}}"
+}
+
+### Assign a non-existent evaluator (well-formed ULID) (expect 404)
+PUT {{baseUrl}}/candidatures/{{candidature_id}}/evaluator
+Content-Type: application/json
+Accept: application/json
+
+{
+  "evaluator_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+}
+
+### Assign to a non-existent candidature (well-formed ULID) (expect 404)
+PUT {{baseUrl}}/candidatures/01ARZ3NDEKTSV4RRFFQ69G5FAV/evaluator
+Content-Type: application/json
+Accept: application/json
+
+{
+  "evaluator_id": "{{evaluator_id}}"
+}
+
+### Assign with a malformed evaluator_id (expect 422)
+PUT {{baseUrl}}/candidatures/{{candidature_id}}/evaluator
+Content-Type: application/json
+Accept: application/json
+
+{
+  "evaluator_id": "not-a-ulid"
+}
+
+
+# =====================================================================
+# Bulk auto-assignment — POST /candidatures/auto-assign
+# Assigns every UNASSIGNED + ELIGIBLE candidature to the least-loaded
+# evaluator. No body. Run the "create evaluator" requests above first so
+# there is someone to assign to (otherwise 409). Re-run to clear the
+# backlog after registering more candidates.
+# =====================================================================
+
+### Auto-assign the whole backlog (expect 200 with { assigned, skipped_ineligible })
+POST {{baseUrl}}/candidatures/auto-assign
+Accept: application/json

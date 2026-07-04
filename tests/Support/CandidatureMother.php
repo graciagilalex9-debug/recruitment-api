@@ -20,8 +20,13 @@ final class CandidatureMother
 {
     public static function withYearsOfExperience(int $years): Candidature
     {
+        return self::create('01BX5ZZKBKACTAV9WEVGEMMVRZ', $years);
+    }
+
+    public static function create(string $id, int $years): Candidature
+    {
         return Candidature::register(
-            new CandidatureId('01BX5ZZKBKACTAV9WEVGEMMVRZ'),
+            new CandidatureId($id),
             new FullName('Ada Lovelace'),
             new Email('ada@example.com'),
             new YearsOfExperience($years),

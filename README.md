@@ -222,6 +222,22 @@ curl -X PUT http://localhost:8080/candidatures/{id}/evaluator \
 > Assignment reuses the candidature-validation rules: **only eligible candidatures can be assigned**.
 > The assignment lives in its own `assignments` table, so the candidature stays immutable.
 
+### `POST /candidatures/auto-assign`
+
+Bulk operation: assigns **every candidature that is both unassigned and eligible** to the
+**least-loaded** evaluator, rebalancing as it goes. "Unassigned" is a SQL condition; "eligible" is the
+domain validation rules (the single source of truth). Returns a summary.
+
+```bash
+curl -X POST http://localhost:8080/candidatures/auto-assign -H "Accept: application/json"
+# { "data": { "assigned": 7, "skipped_ineligible": 2 } }
+```
+
+| Status | When |
+|---|---|
+| `200 OK` | Summary of the run (`assigned`, `skipped_ineligible`); `0` assigned when there is nothing to do. |
+| `409 Conflict` | There are eligible candidatures to assign but no evaluators exist. |
+
 ## Testing
 
 Philosophy: **no internal mocks** — only external boundaries would be mocked (there are none yet).
@@ -255,6 +271,7 @@ This repo is built capability by capability (Spec-Driven Development; see `opens
 | 1 | `candidature-registration` | ✅ Implemented |
 | 2 | `candidature-validation` (extensible rule pipeline) | ✅ Implemented |
 | 3 | `evaluator-management` + `evaluator-assignment` | ✅ Implemented |
+| + | `auto-assignment` (least-loaded bulk, beyond the brief) | ✅ Implemented |
 | 4 | `consolidated-listing` (complex SQL) | ⬜ Planned |
 | 5 | `candidature-summary` (Collections) | ⬜ Planned |
 | 6 | `excel-report` (queue + email) | ⬜ Planned |
