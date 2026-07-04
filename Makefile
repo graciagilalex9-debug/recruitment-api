@@ -6,13 +6,22 @@ EXEC := $(DC) exec -e HOME=/tmp app
 export UID := $(shell id -u)
 export GID := $(shell id -g)
 
-.PHONY: help up down build restart logs shell \
+.PHONY: help setup up down build restart logs shell \
         test stan pint pint-fix quality \
         migrate fresh tinker
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
+
+## --- Setup ---
+setup: ## First-time setup from a fresh clone (env, build, start, app key, migrate + seed)
+	cp -n .env.example .env || true
+	$(DC) build
+	$(DC) up -d
+	$(EXEC) php artisan key:generate
+	$(EXEC) php artisan migrate --seed
+	@echo "\nReady -> API http://localhost:8080  ·  Swagger http://localhost:8080/docs  ·  Mailpit http://localhost:8025"
 
 ## --- Stack ---
 up: ## Start the whole stack

@@ -147,12 +147,23 @@ of chained.
 
 **Prerequisites:** Docker + Docker Compose. (No local PHP/Composer needed.)
 
+From a fresh clone, one command does everything:
+
 ```bash
-cp .env.example .env          # the committed .env already has sane Docker defaults
-make build                    # build the php-fpm 8.4 image
-make up                       # start nginx, app, worker, mysql, redis, mailpit, mysql-test
-make migrate                  # create the schema on the dev database
-make fresh                    # (optional) drop + migrate + seed 25 sample candidatures
+make setup    # copies .env.example -> .env, builds, starts the stack,
+              # generates APP_KEY, and runs migrations + seeders
+```
+
+`.env` is git-ignored (it holds secrets); the committed **`.env.example`** has working Docker defaults,
+and `make setup` derives `.env` from it and generates the app key — so there is nothing to configure by
+hand. Equivalent manual steps:
+
+```bash
+cp .env.example .env
+make build                       # build the php-fpm 8.4 image
+make up                          # start nginx, app, worker, mysql, redis, mailpit, mysql-test
+docker compose exec app php artisan key:generate
+make fresh                       # drop + migrate + seed (25 candidatures, 5 evaluators, 15 assignments)
 ```
 
 Services:
